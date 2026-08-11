@@ -1,0 +1,141 @@
+# DeliveryFlow Backend — Docker Compose (Docker Desktop)
+# Run: docker compose up -d
+# Logs: docker compose logs -f backend
+
+services:
+  # ===========================
+  # Application
+  # ===========================
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: df-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://df_user:df_password@postgres:5432/deliveryflow
+      - REDIS_URL=redis://redis:6379
+      - S3_ENDPOINT=http://seaweed-s3:8333
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      seaweed-s3:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - df-network
+
+  taskiq-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: df-taskiq
+    command: ["taskiq", "worker", "app.tasks.worker:broker"]
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://df_user:df_password@postgres:5432/deliveryflow
+      - REDIS_URL=redis://redis:6379
+      - S3_ENDPOINT=http://seaweed-s3:8333
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - df-network
+
+  # ===========================
+  # Infrastructure
+  # ===========================
+  postgres:
+    image: postgres:16-alpine
+    container_name: df-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: deliveryflow
+      POSTGRES_USER: df_user
+      POSTGRES_PASSWORD: df_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U df_user -d deliveryflow"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - df-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: df-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - df-network
+
+  seaweed-master:
+    image: chrislusf/seaweedfs:latest
+    container_name: df-seaweed-master
+    ports:
+      - "9333:9333"
+    command: "server -master.volumeSizeLimitMB=100"
+    volumes:
+      - seaweedmaster:/data
+    restart: unless-stopped
+    networks:
+      - df-network
+
+  seaweed-volume:
+    image: chrislusf/seaweedfs:latest
+    container_name: df-seaweed-volume
+    command: "volume -mserver=seaweed-master:9333 -port=8080"
+    depends_on:
+      - seaweed-master
+    volumes:
+      - seaweedvol:/data
+    restart: unless-stopped
+    networks:
+      - df-network
+
+  seaweed-s3:
+    image: chrislusf/seaweedfs:latest
+    container_name: df-seaweed-s3
+    ports:
+      - "8333:8333"
+    environment:
+      - AWS_ACCESS_KEY_ID=seaweed
+      - AWS_SECRET_ACCESS_KEY=seaweed
+    command: "s3 -port=8333 -master.url=http://seaweed-master:9333"
+    depends_on:
+      - seaweed-master
+    restart: unless-stopped
+    networks:
+      - df-network
+
+volumes:
+  pgdata:
+  redisdata:
+  seaweedmaster:
+  seaweedvol:
+
+networks:
+  df-network:
+    driver: bridge

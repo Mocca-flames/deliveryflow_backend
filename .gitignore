@@ -1,0 +1,57 @@
+# Environment / Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+
+# Type checking
+.mypy_cache/
+.pyre/
+.pytype/
+
+# Ruff
+.ruff_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker volumes (local data)
+docker-compose.override.yml
+
+# Alembic migrations versions (auto-generated, will be created per-environment)
+# Uncomment if you want to track migrations:
+# app/migrations/versions/*.py
+
+# Temp files
+test_db.py
+test_redis.py
+test_seaweed.py

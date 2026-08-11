@@ -1,0 +1,27 @@
+# DeliveryFlow Backend — .dockerignore
+
+__pycache__
+*.pyc
+*.pyo
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+.venv
+venv
+*.egg-info
+dist
+build
+.pytest_cache
+.mypy_cache
+.ruff_cache
+htmlcov
+coverage
+*.cover
+tests
+docs
+*.md
+!README.md
+.vscode
+.idea
