@@ -1,6 +1,7 @@
 # DeliveryFlow Backend — Docker Compose (Docker Desktop)
 # Run: docker compose up -d
 # Logs: docker compose logs -f backend
+# Migrate: docker compose run --rm migrate
 
 services:
   # ===========================
@@ -27,6 +28,22 @@ services:
       seaweed-s3:
         condition: service_started
     restart: unless-stopped
+    networks:
+      - df-network
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: df-migrate
+    command: ["alembic", "upgrade", "head"]
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://df_user:df_password@postgres:5432/deliveryflow
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - df-network
 

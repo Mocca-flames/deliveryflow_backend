@@ -1,0 +1,64 @@
+doc_type: CUSTOMS_DECLARATION
+category: border
+label: Customs Declaration
+description: SAD 500, export/import declaration, or customs form
+version: 1
+confidence_threshold: 0.7
+
+fields:
+  - name: declaration_number
+    type: string
+    required: true
+    description: "SAD or declaration reference number"
+    examples: ["SAD/2024/12345", "EXP/2024/67890"]
+
+  - name: declaration_type
+    type: string
+    required: true
+    allowed_values: ["SAD 500", "SAD 502", "SAD 505", "SAD 507", "Export", "Import", "Transit"]
+    description: "Type of customs declaration"
+
+  - name: goods_description
+    type: string
+    required: false
+    description: "Description of goods being transported"
+
+  - name: hs_code
+    type: string
+    required: false
+    description: "Harmonized System code"
+
+  - name: declared_value
+    type: string
+    required: false
+    description: "Declared value of goods"
+
+  - name: currency
+    type: string
+    required: false
+    description: "Currency of declared value"
+
+  - name: clearing_agent
+    type: string
+    required: false
+    description: "Clearing agent name or company"
+
+  - name: lodgement_date
+    type: date
+    required: false
+    format: "YYYY-MM-DD"
+
+  - name: country_of_origin
+    type: string
+    required: false
+
+  - name: country_of_destination
+    type: string
+    required: false
+
+visual_hints: |
+  Common layouts:
+  - Official SARS SAD 500 form (multi-part carbon copy)
+  - Digital customs declaration printout
+  - ASYCUDA system output
+  Look for: declaration number, SAD type, goods description, value, dates.

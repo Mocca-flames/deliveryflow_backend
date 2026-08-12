@@ -1,0 +1,66 @@
+doc_type: VEHICLE_LICENCE
+category: driver_pack
+label: Motor Vehicle Licence
+description: South African motor vehicle licence disc or roadworthiness certificate
+version: 1
+confidence_threshold: 0.7
+
+fields:
+  - name: reg_number
+    type: string
+    required: true
+    pattern: "^[A-Z]{2,3}\\s?\\d{2,4}[\\s-]?\\w{0,3}$"
+    description: "Licence plate (e.g., CKG992X, MM17PXGP)"
+    examples: ["CKG992X", "MM17PX GP", "LP99NK GP"]
+
+  - name: make_model
+    type: string
+    required: true
+    description: "Vehicle make and model"
+    examples: ["UD Trucks Quester", "Powerstar", "Toyota Hilux"]
+
+  - name: colour
+    type: string
+    required: false
+    description: "Vehicle colour"
+
+  - name: attention
+    type: string
+    required: false
+    description: "Registered owner or company name"
+
+  - name: expiry_date
+    type: date
+    required: true
+    format: "YYYY-MM-DD"
+    validation:
+      - type: not_expired
+        message: "Vehicle licence has expired"
+
+  - name: vin
+    type: string
+    required: false
+    pattern: "^[A-HJ-NPR-Z0-9]{17}$"
+    description: "17-character Vehicle Identification Number"
+
+  - name: engine_number
+    type: string
+    required: false
+    description: "Engine serial number"
+
+  - name: gvm_kg
+    type: number
+    required: false
+    description: "Gross vehicle mass in kg"
+    validation:
+      - type: range
+        min: 500
+        max: 100000
+        message: "Unusual GVM value"
+
+visual_hints: |
+  Common layouts:
+  - Rectangular disc (windshield) with expiry date prominently displayed
+  - A4 certificate with vehicle details in table format
+  - Card-format with photo and barcode
+  Look for: large registration plate number, expiry date, make/model, VIN.

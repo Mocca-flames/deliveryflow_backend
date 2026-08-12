@@ -1,0 +1,72 @@
+doc_type: POD_PHOTO
+category: pod
+label: Proof of Delivery Photo
+description: Photo taken at delivery point showing goods received
+version: 1
+confidence_threshold: 0.6
+
+fields:
+  - name: delivery_date
+    type: date
+    required: false
+    format: "YYYY-MM-DD"
+    description: "Date of delivery (may be on document or inferred)"
+
+  - name: delivered_to
+    type: string
+    required: false
+    description: "Name of person who received the goods"
+
+  - name: receiver_id_number
+    type: string
+    required: false
+    description: "ID number of receiver if visible"
+
+  - name: receiver_designation
+    type: string
+    required: false
+    description: "Job title or role of receiver"
+
+  - name: consignment_number
+    type: string
+    required: false
+    description: "Waybill or consignment reference number"
+
+  - name: origin
+    type: string
+    required: false
+    description: "Pickup location"
+
+  - name: destination
+    type: string
+    required: false
+    description: "Delivery location"
+
+  - name: cargo_condition
+    type: string
+    required: false
+    allowed_values: ["good", "damaged", "partial", "unknown"]
+    description: "Condition of cargo on delivery"
+
+  - name: damage_notes
+    type: string
+    required: false
+    description: "Description of any damage observed"
+
+  - name: signature_present
+    type: boolean
+    required: false
+    description: "Is there a visible signature?"
+
+  - name: photo_description
+    type: string
+    required: true
+    description: "Brief description of what the photo shows"
+
+visual_hints: |
+  Common photo content:
+  - Loaded/unloaded truck at warehouse or delivery point
+  - Signed delivery note or waybill
+  - Damaged goods (if applicable)
+  - Receiver standing next to goods
+  Look for: signatures, dates, cargo condition, delivery notes.

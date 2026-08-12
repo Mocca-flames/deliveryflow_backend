@@ -1,0 +1,42 @@
+doc_type: ID_DOCUMENT
+category: driver_pack
+label: South African ID Document
+description: South African ID card or green bar-coded ID book
+version: 1
+confidence_threshold: 0.7
+
+fields:
+  - name: full_name
+    type: string
+    required: true
+    description: "Full name as shown on ID"
+
+  - name: id_number
+    type: string
+    required: true
+    pattern: "^\\d{13}$"
+    description: "13-digit South African ID number"
+    validation:
+      - type: id_checksum
+        message: "Invalid SA ID number checksum"
+
+  - name: date_of_birth
+    type: date
+    required: false
+    format: "YYYY-MM-DD"
+
+  - name: gender
+    type: string
+    required: false
+    allowed_values: ["M", "F"]
+
+  - name: citizenship
+    type: string
+    required: false
+    description: "South African citizen or permanent resident"
+
+visual_hints: |
+  Common layouts:
+  - Green bar-coded ID book (older format)
+  - Smart card ID (newer format, credit-card sized)
+  Look for: 13-digit ID number, full name, date of birth, photo.

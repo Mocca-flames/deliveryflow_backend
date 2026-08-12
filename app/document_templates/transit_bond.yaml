@@ -1,0 +1,63 @@
+doc_type: TRANSIT_BOND
+category: border
+label: Transit Bond
+description: Transit bond or guarantee document for goods passing through third country
+version: 1
+confidence_threshold: 0.7
+
+fields:
+  - name: bond_number
+    type: string
+    required: true
+    description: "Bond or guarantee reference number"
+
+  - name: bond_type
+    type: string
+    required: false
+    allowed_values: ["Single", "Multiple", "Blanket"]
+    description: "Type of transit bond"
+
+  - name: amount
+    type: string
+    required: false
+    description: "Bond amount"
+
+  - name: currency
+    type: string
+    required: false
+
+  - name: issuing_authority
+    type: string
+    required: false
+    description: "Authority or bank that issued the bond"
+
+  - name: origin_country
+    type: string
+    required: false
+
+  - name: transit_country
+    type: string
+    required: false
+    description: "Country being transited through"
+
+  - name: destination_country
+    type: string
+    required: false
+
+  - name: valid_to
+    type: date
+    required: false
+    format: "YYYY-MM-DD"
+    validation:
+      - type: not_expired
+        message: "Transit bond has expired"
+
+  - name: goods_description
+    type: string
+    required: false
+
+visual_hints: |
+  Common layouts:
+  - Official government or bank bond document
+  - May include cargo details and route
+  Look for: bond number, amount, countries, validity dates.

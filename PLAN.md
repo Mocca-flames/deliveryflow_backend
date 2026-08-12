@@ -74,7 +74,16 @@ backend/
 │   │   ├── token.py             # Tokenized link generation/validation
 │   │   ├── exceptions.py        # Custom exception classes
 │   │   ├── events.py            # Event types for internal pub/sub
-│   │   └── currency.py          # Currency code validation (ZAR default, no logic yet)
+│   │   ├── currency.py          # Currency code validation (ZAR default, no logic yet)
+│   │   └── documents/           # SADC cross-border document types (modular)
+│   │       ├── __init__.py      # Public API — re-exports registry functions
+│   │       ├── commercial.py    # Invoice, Packing List, Certificate of Origin, DG, Phytosanitary, Veterinary
+│   │       ├── transport.py     # Road Waybill, CMR, Consignment Note, DA 187 Manifest
+│   │       ├── customs.py       # SAD 500/502/505/507, Export/Import Declarations, Transit Bond, SRCTD
+│   │       ├── permits.py       # CBRTA, SADC Driver Cert, PrDP, Import/Export Permits
+│   │       ├── insurance.py     # COMESA Yellow Card, GIT Insurance, TIP
+│   │       ├── driver_pack.py   # Vehicle Licence, Driver's Licence, ID, Insurance Letter
+│   │       └── registry.py      # Central registry, route-aware requirements, SACU logic
 │   │
 │   ├── state_machines/          # Milestone & KYC state machines
 │   │   ├── __init__.py
@@ -87,10 +96,25 @@ backend/
 │   │   ├── trip.py              # Trip lifecycle service
 │   │   ├── invoice.py           # Invoice service (milestone transitions, 70/30 split)
 │   │   ├── document.py          # Document upload, storage, retrieval
-│   │   ├── drivers_pack.py      # KYC orchestration, OCR trigger, review queue
+│   │   ├── drivers_pack.py      # KYC orchestration, LLM extraction trigger, review queue
+│   │   ├── llm_extractor.py     # Vision LLM document extraction (Mistral/Gemini/OpenRouter)
+│   │   ├── template_registry.py # Document template loader, prompt builder, validator
 │   │   ├── notification.py      # NotificationDispatcher interface
 │   │   ├── sync.py              # Outbox sync processing
 │   │   └── tracking.py          # Tokenized tracking link data
+│   │
+│   ├── document_templates/      # YAML templates for LLM extraction (admin-configurable)
+│   │   ├── vehicle_licence.yaml
+│   │   ├── drivers_licence.yaml
+│   │   ├── id_document.yaml
+│   │   ├── insurance_letter.yaml
+│   │   ├── pod_photo.yaml
+│   │   ├── pod_document.yaml
+│   │   ├── cross_border_permit.yaml
+│   │   ├── customs_declaration.yaml
+│   │   ├── comesa_yellow_card.yaml
+│   │   ├── transit_bond.yaml
+│   │   └── certificate_of_origin.yaml
 │   │
 │   ├── notifications/           # Pluggable notifier adapters
 │   │   ├── __init__.py
@@ -152,6 +176,8 @@ backend/
 | Task Queue | Taskiq + Taskiq-Redis | latest |
 | Object Storage | SeaweedFS | S3-compatible API |
 | Auth | JWT (jose) | RS256 |
+| Document Extraction | Vision LLM (Mistral → Gemini → OpenRouter) | multi-provider |
+| PDF Generation | WeasyPrint + Jinja2 | 69.0+ |
 | Testing | pytest + pytest-asyncio | latest |
 | Linting | Ruff | latest |
 | Type Checking | mypy + pyright | latest |
@@ -388,7 +414,7 @@ CREATE TABLE invoice_milestones (
 );
 
 -- ============================================================
--- DOCUMENTS (uploaded files)
+-- DOCUMENTS (uploaded files — SADC cross-border doc vault)
 -- ============================================================
 CREATE TABLE documents (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -397,23 +423,60 @@ CREATE TABLE documents (
     drivers_pack_id UUID REFERENCES drivers_packs(id),
     doc_type        TEXT NOT NULL
                     CHECK (doc_type IN (
-                        'contract',
-                        'quotation',
-                        'pod_photo',
-                        'border_doc',
+                        -- Commercial / Trade
+                        'commercial_invoice',
+                        'packing_list',
+                        'certificate_of_origin',
+                        'dangerous_goods_declaration',
+                        'phytosanitary_certificate',
+                        'veterinary_certificate',
+                        -- Transport
+                        'road_waybill',
+                        'cmr_note',
+                        'road_consignment_note',
+                        'customs_road_manifest',
+                        -- Customs
+                        'sad_500',
+                        'sad_502',
+                        'sad_505',
+                        'sad_507',
+                        'export_declaration',
+                        'import_declaration',
+                        'transit_bond',
+                        'srctd',
+                        -- Permits & Licences
+                        'cbrrta_permit',
+                        'sadc_driver_certificate',
+                        'prdp',
+                        'import_permit',
+                        'export_permit',
+                        -- Insurance
+                        'comesa_yellow_card',
+                        'git_insurance',
+                        'temporary_import_permit',
+                        -- Driver's Pack docs
                         'vehicle_licence',
                         'drivers_licence',
                         'id_document',
                         'insurance_letter',
+                        -- Other
+                        'pod_photo',
                         'other'
                     )),
     filename        TEXT NOT NULL,
     storage_key     TEXT NOT NULL,                -- Key in SeaweedFS
     mime_type       TEXT,
     size_bytes      BIGINT,
-    ocr_result      JSONB,                        -- OCR extraction results
+    ocr_result      JSONB,                        -- OCR extraction results (Phase 3)
     ocr_confidence  NUMERIC(5,2),
     uploaded_by     UUID REFERENCES users(id),
+    uploaded_via    TEXT DEFAULT 'web'
+                    CHECK (uploaded_via IN ('web', 'whatsapp', 'api', 'sync')),
+    -- Verification (HITL for billing-triggering docs)
+    verified        BOOLEAN DEFAULT false,
+    verified_by     UUID REFERENCES users(id),
+    verified_at     TIMESTAMPTZ,
+    verification_notes TEXT,
     created_at      TIMESTAMPTZ DEFAULT now()
 );
 
@@ -480,6 +543,29 @@ CREATE TABLE sync_events (
     created_at      TIMESTAMPTZ DEFAULT now(),
     UNIQUE (event_uuid, device_id)
 );
+
+-- ============================================================
+-- TRIP DOCUMENT CHECKLIST (required docs per trip)
+-- ============================================================
+CREATE TABLE trip_document_requirements (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id       UUID NOT NULL REFERENCES tenants(id),
+    trip_id         UUID NOT NULL REFERENCES trips(id),
+    doc_type        TEXT NOT NULL,                 -- Same enum as documents.doc_type
+    required        BOOLEAN DEFAULT true,          -- Is this doc mandatory for this trip?
+    uploaded        BOOLEAN DEFAULT false,         -- Has a matching document been uploaded?
+    document_id     UUID REFERENCES documents(id), -- FK to the uploaded document
+    -- Route-aware: which country requires this doc
+    required_by     TEXT,                          -- Country code (e.g., 'ZA', 'ZW', 'MZ')
+    category        TEXT NOT NULL                  -- 'commercial', 'transport', 'customs', 'permit', 'insurance'
+                    CHECK (category IN ('commercial', 'transport', 'customs', 'permit', 'insurance')),
+    notes           TEXT,
+    created_at      TIMESTAMPTZ DEFAULT now(),
+    updated_at      TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_trip_doc_req_trip ON trip_document_requirements(trip_id);
+CREATE INDEX idx_trip_doc_req_unuploaded ON trip_document_requirements(trip_id, uploaded) WHERE uploaded = false;
 
 -- ============================================================
 -- NOTIFICATION LOG (audit trail)
@@ -591,23 +677,376 @@ CREATE INDEX idx_notification_log_pending ON notification_log(status, created_at
 ```
 
 **Rules:**
-- `pending → auto_verified | flagged`: Automatic OCR check. If OCR fails or cross-document inconsistency → `flagged`.
+- `pending → auto_verified | flagged`: Automatic Vision LLM extraction. If LLM fails, low confidence, or cross-document inconsistency → `flagged`.
 - `flagged → manually_cleared`: Admin reviews in Tenant Admin KYC queue.
 - Any state → `expired`: Scheduled Taskiq job checks `expires_at` and flags.
 - **Hard gate:** Trip cannot reach `contract_awarded` if assigned driver/vehicle has `pending` or `expired` pack.
 
 ---
 
-## 5. API Surface (v1)
+## 5. SADC Document Registry (Modular)
 
-### 5.1 Authentication
+### 5.1 Structure
+
+The document system lives in `app/core/documents/` with each category in its own module:
+
+```
+app/core/documents/
+├── __init__.py        # Public API — re-exports registry functions
+├── commercial.py      # Commercial/trade documents
+├── transport.py       # Transport documents
+├── customs.py         # Customs declarations
+├── permits.py         # Permits & licences
+├── insurance.py       # Insurance documents
+├── driver_pack.py     # Driver's pack documents
+└── registry.py        # Central registry, route-aware logic
+```
+
+### 5.2 DocType Dataclass
+
+Every document type is defined as a `DocType` dataclass:
+
+```python
+@dataclass(frozen=True)
+class DocType:
+    key: str                    # Database value (e.g., "commercial_invoice")
+    label: str                  # Human-readable name
+    description: str            # Full regulatory context
+    category: str               # "commercial", "transport", "customs", "permit", "insurance"
+    mandatory: bool = True      # Default requirement status
+    sacu_only: bool = False     # Simplified SACU-only documentation
+    ocr_extractable: bool = False  # Phase 3 OCR flag
+    transit_countries: list[str] | None = None  # Required only for specific transit routes
+```
+
+### 5.3 Route-Aware Requirements
+
+```python
+from app.core.documents import get_required_doc_types, is_sacu_only
+
+# Full SADC route (30+ documents)
+docs = get_required_doc_types("ZA", "ZW", ["MZ"])
+
+# SACU-only route (simplified)
+sacu_docs = get_required_doc_types("ZA", "BW")
+
+# Check if route qualifies for SACU simplification
+if is_sacu_only("ZA", "BW"):
+    # Reduced documentation requirements
+    ...
+```
+
+### 5.4 Category Modules
+
+| Module | Document Types | Examples |
+|--------|----------------|----------|
+| `commercial.py` | 6 | Commercial Invoice, Packing List, Certificate of Origin, DG Declaration, Phytosanitary, Veterinary |
+| `transport.py` | 4 | Road Waybill, CMR Note, Consignment Note, DA 187 Manifest |
+| `customs.py` | 7 | SAD 500/502/505/507, Export/Import Declarations, Transit Bond, SRCTD |
+| `permits.py` | 5 | CBRTA Permit, SADC Driver Certificate, PrDP, Import/Export Permits |
+| `insurance.py` | 3 | COMESA Yellow Card, GIT Insurance, Temporary Import Permit |
+| `driver_pack.py` | 4 | Vehicle Licence, Driver's Licence, ID Document, Insurance Letter |
+
+### 5.5 Usage in Validation
+
+```python
+# Pre-departure document validation
+async def validate_trip_documents(trip_id: UUID, db: AsyncSession):
+    trip = await db.get(Trip, trip_id)
+    required = get_required_doc_types(
+        trip.origin_country,
+        trip.destination_country,
+        trip.transit_countries
+    )
+    uploaded = await get_uploaded_doc_types(trip_id, db)
+
+    missing = [doc for doc in required if doc.key not in uploaded]
+    if missing:
+        raise DocumentValidationError(
+            f"Missing required documents: {[d.label for d in missing]}"
+        )
+```
+
+---
+
+## 6. LLM Document Extraction (Vision LLM)
+
+### 6.1 Architecture
+
+No local OCR. Images are sent directly to vision-capable LLMs for structured data extraction.
+
+```
+Image Upload → PIL decode → Base64 encode → Vision LLM → Structured JSON
+                                                              ↓
+                                                    { doc_type, confidence, fields, summary }
+                                                              ↓
+                                                    Post-processing (expiry calc, normalization)
+                                                              ↓
+                                                    Validation (blacklist, format, cross-doc)
+```
+
+### 6.2 Multi-Provider Fallback
+
+| Priority | Provider | Model | Cost/Page | Notes |
+|----------|----------|-------|-----------|-------|
+| 1 (Primary) | Mistral | ministral-14b-latest | ~$0.001 | Fast, good accuracy |
+| 2 (Fallback) | Google Gemini | gemini-2.5-flash | ~$0.00075 | Cheapest, fast |
+| 3 (Fallback) | OpenRouter | openai/gpt-4o-mini | ~$0.001 | Best accuracy |
+
+**Automatic retry**: 3 attempts per provider with exponential backoff on 429/5xx errors.
+
+### 6.3 Document Categories & Prompts
+
+| Category | Prompt | Extracted Fields |
+|----------|--------|------------------|
+| **Driver's Pack** | `_prompt_driver_pack()` | Vehicle: reg, make_model, VIN, expiry. Driver: name, id_number, licence_code, valid_to. Insurance: insurer, cover_type, sum_insured |
+| **Proof of Delivery** | `_prompt_pod()` | delivery_date, delivered_to, receiver_id, cargo_condition, damage_notes, signature_present |
+| **Border Clearance** | `_prompt_border_clearance()` | permit_number, authorised_countries, declaration_number, covered_countries, valid_to |
+| **General** | `_prompt_general()` | Auto-detect doc_type, extract all visible fields |
+
+### 6.4 Configuration (env vars)
+
+```env
+LLM_ENABLED=true
+LLM_PROVIDERS=mistral,google          # comma-separated priority order
+
+MISTRAL_API_KEY=...                   # Primary provider
+MISTRAL_VISION_MODEL=ministral-14b-latest
+
+GOOGLE_API_KEY=...                    # Fallback
+GOOGLE_VISION_MODEL=gemini-2.5-flash
+
+OPENROUTER_API_KEY=...               # Optional fallback
+OPENROUTER_VISION_MODEL=openai/gpt-4o-mini
+
+LLM_MAX_CONCURRENT_PAGES=3           # Semaphore for batch processing
+```
+
+### 6.5 Usage
+
+```python
+from app.services.llm_extractor import get_extractor, post_process_result
+
+extractor = get_extractor()
+
+# Single image extraction
+result = extractor.extract(image, doc_category="driver_pack")
+result = post_process_result(result)
+# result = { "doc_type": "VEHICLE_LICENCE", "confidence": 0.95, "fields": {...}, "summary": "🚛 Truck: CKG992X | Powerstar" }
+
+# Async extraction
+result = await extractor.extract_async(image, doc_category="pod")
+
+# Batch extraction (Driver's Pack with multiple docs)
+results = await extractor.extract_batch(
+    images=[("vehicle", vehicle_img), ("licence", licence_img), ("insurance", insurance_img)],
+    doc_category="driver_pack",
+    max_concurrent=3,
+)
+```
+
+### 6.6 Post-Processing
+
+After LLM extraction, fields are normalized:
+- Vehicle licence: expiry date → `is_expired`, `days_to_expiry`
+- Insurance: string → boolean `is_legit`
+- Plate normalization: uppercase, strip whitespace
+
+### 6.7 Fallback Behavior
+
+| Scenario | Behavior |
+|----------|----------|
+| Primary provider 429 (rate limit) | Retry 2x with backoff, then try next provider |
+| Primary provider 5xx (server error) | Retry 2x, then try next provider |
+| All providers fail | Return `rejection_flag: "LLM_UNAVAILABLE"` |
+| LLM returns invalid JSON | Return `rejection_flag: "LLM_PARSE_ERROR"` |
+| Low confidence (< 0.5) | Admin review queue flag |
+
+### 6.8 Source
+
+Adapted from `reference_copy/apex_ai-bot/ocr/app/services/simple_llm_extractor.py` (v4 — Vision LLM only, no PaddleOCR).
+
+---
+
+## 7. Document Template System (Admin-Configurable)
+
+### 7.1 Architecture
+
+Document templates are **data-driven** — YAML files define fields, validation rules, and extraction prompts. Admins can add/tune templates via API without code changes.
+
+```
+document_templates/          # YAML templates (one per doc type)
+        ↓
+TemplateRegistry             # Loads YAML, provides lookup
+        ↓
+PromptBuilder                # Dynamic prompt from template
+        ↓
+LLM Extraction               # Sends prompt + image to LLM
+        ↓
+ResponseValidator            # Validates against template schema
+        ↓
+ExtractionResult             # Fields + validation + metadata
+```
+
+### 7.2 Template Structure
+
+```yaml
+# document_templates/vehicle_licence.yaml
+doc_type: VEHICLE_LICENCE
+category: driver_pack
+label: Motor Vehicle Licence
+version: 1
+confidence_threshold: 0.7
+
+fields:
+  - name: reg_number
+    type: string
+    required: true
+    pattern: "^[A-Z]{2,3}\\s?\\d{2,4}[\\s-]?\\w{0,3}$"
+    description: "Licence plate (e.g., CKG992X)"
+    examples: ["CKG992X", "MM17PX GP"]
+    validation:
+      - type: regex
+        pattern: "^[A-Z]{2,3}\\s?\\d{2,4}$"
+        message: "Invalid registration format"
+
+  - name: expiry_date
+    type: date
+    required: true
+    format: "YYYY-MM-DD"
+    validation:
+      - type: not_expired
+        message: "Vehicle licence has expired"
+
+visual_hints: |
+  Look for: licence plate, make/model, VIN, expiry date.
+```
+
+### 7.3 Field Types
+
+| Type | Description | Validation Options |
+|------|-------------|-------------------|
+| `string` | Text value | `pattern`, `allowed_values` |
+| `number` | Numeric value | `range` (min/max) |
+| `date` | Date value | `not_expired`, `format` |
+| `boolean` | True/false | `equals` |
+| `list` | Array of values | — |
+
+### 7.4 Built-in Validation Rules
+
+| Rule | Description | Fields |
+|------|-------------|--------|
+| `not_expired` | Date must be in future | date fields |
+| `id_checksum` | SA ID 13-digit checksum | id_number |
+| `range` | Numeric min/max | number fields |
+| `equals` | Must equal value | boolean fields |
+| `regex` | Pattern match | string fields |
+
+### 7.5 Admin API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/admin/templates` | List all templates |
+| GET | `/api/v1/admin/templates/{doc_type}` | Get specific template |
+| POST | `/api/v1/admin/templates` | Create new template |
+| PUT | `/api/v1/admin/templates/{doc_type}` | Update template |
+| DELETE | `/api/v1/admin/templates/{doc_type}` | Delete template |
+| POST | `/api/v1/admin/templates/reload` | Reload from disk |
+| POST | `/api/v1/admin/templates/test` | Test extraction with sample image |
+
+### 7.6 Adding a New Document Type
+
+1. Create YAML template in `document_templates/`:
+
+```yaml
+# document_templates/my_new_doc.yaml
+doc_type: MY_NEW_DOC
+category: border
+label: My New Document
+fields:
+  - name: field1
+    type: string
+    required: true
+    description: "Description of field1"
+  - name: field2
+    type: date
+    required: false
+    format: "YYYY-MM-DD"
+visual_hints: |
+  Look for: field1, field2 in the document.
+```
+
+2. Call `POST /api/v1/admin/templates/reload` or restart the service
+3. The LLM extractor will now automatically use this template for extraction
+
+### 7.7 Tuning Extraction
+
+Admins can tune extraction by:
+
+1. **Adding examples** — helps LLM understand expected format:
+   ```yaml
+   examples: ["CKG992X", "MM17PX GP"]
+   ```
+
+2. **Adding visual hints** — describes where to look in the document:
+   ```yaml
+   visual_hints: |
+     The document is usually a rectangular card with the expiry date
+     prominently displayed in the top-right corner.
+   ```
+
+3. **Adding custom prompt instructions** — extra context for the LLM:
+   ```yaml
+   custom_prompt_addition: |
+     If the document is in Afrikaans, translate field values to English.
+     If the image is blurry, return confidence < 0.5.
+   ```
+
+4. **Adjusting confidence threshold** — controls when to flag for review:
+   ```yaml
+   confidence_threshold: 0.8  # Higher = more strict
+   ```
+
+5. **Adding validation rules** — catches bad extractions:
+   ```yaml
+   validation:
+     - type: not_expired
+       message: "Document has expired"
+     - type: range
+       min: 1000
+       max: 100000
+       message: "Unusual value"
+   ```
+
+### 7.8 Template Files
+
+```
+app/document_templates/
+├── vehicle_licence.yaml
+├── drivers_licence.yaml
+├── id_document.yaml
+├── insurance_letter.yaml
+├── pod_photo.yaml
+├── pod_document.yaml
+├── cross_border_permit.yaml
+├── customs_declaration.yaml
+├── comesa_yellow_card.yaml
+├── transit_bond.yaml
+└── certificate_of_origin.yaml
+```
+
+---
+
+## 8. API Surface (v1)
+
+### 6.1 Authentication
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
 | POST | `/api/v1/auth/login` | None | Returns JWT access + refresh tokens |
 | POST | `/api/v1/auth/refresh` | Refresh token | Returns new access token |
 
-### 5.2 Tenant-Scoped CRUD
+### 6.2 Tenant-Scoped CRUD
 
 All endpoints below require `Bearer` JWT and are automatically scoped to the user's `tenant_id` via RLS.
 
@@ -620,7 +1059,7 @@ All endpoints below require `Bearer` JWT and are automatically scoped to the use
 | GET/POST | `/api/v1/vehicles` | List/create vehicles (under carrier) |
 | GET/PUT/DELETE | `/api/v1/vehicles/{id}` | Vehicle detail |
 
-### 5.3 Trip Lifecycle
+### 6.3 Trip Lifecycle
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -634,7 +1073,7 @@ All endpoints below require `Bearer` JWT and are automatically scoped to the use
 | POST | `/api/v1/trips/{id}/complete` | Mark delivered |
 | POST | `/api/v1/trips/{id}/cancel` | Cancel trip |
 
-### 5.4 Invoice & Milestones
+### 6.4 Invoice & Milestones
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -647,7 +1086,7 @@ All endpoints below require `Bearer` JWT and are automatically scoped to the use
 | POST | `/api/v1/invoices/{id}/release-balance` | Release 30% balance |
 | GET | `/api/v1/invoices/{id}/milestones` | Full milestone event log |
 
-### 5.5 Driver's Pack (KYC)
+### 6.5 Driver's Pack (KYC)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -658,7 +1097,7 @@ All endpoints below require `Bearer` JWT and are automatically scoped to the use
 | POST | `/api/v1/drivers-packs/{id}/flag` | Admin manual flag |
 | GET | `/api/v1/drivers-packs/queue` | Admin review queue (flagged packs) |
 
-### 5.6 Documents
+### 6.6 Documents
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -668,14 +1107,14 @@ All endpoints below require `Bearer` JWT and are automatically scoped to the use
 | GET | `/api/v1/trips/{trip_id}/documents` | List documents for trip |
 | GET | `/api/v1/drivers-packs/{pack_id}/documents` | List documents for pack |
 
-### 5.7 Sync (Flutter Outbox)
+### 6.7 Sync (Flutter Outbox)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/v1/sync/events` | Batch upload sync events |
 | GET | `/api/v1/sync/events` | Poll for unprocessed events |
 
-### 5.8 Public (No Auth)
+### 6.8 Public (No Auth)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -688,7 +1127,7 @@ All endpoints below require `Bearer` JWT and are automatically scoped to the use
 
 ---
 
-## 6. Authentication & Authorization
+## 7. Authentication & Authorization
 
 ### 6.1 JWT Structure
 
@@ -729,7 +1168,7 @@ async def require_super_admin(user: User = Depends(get_current_user)) -> User:
 
 ---
 
-## 7. Task Queue (Taskiq + Redis)
+## 8. Task Queue (Taskiq + Redis)
 
 ### 7.1 Configuration
 
@@ -763,7 +1202,7 @@ async def dispatch_notification(notification_id: UUID):
 
 ---
 
-## 8. Object Storage (SeaweedFS)
+## 9. Object Storage (SeaweedFS)
 
 ### 8.1 Storage Interface
 
@@ -803,7 +1242,7 @@ Example: `a1b2c3d4/pod_photo/trip-uuid/abc123_image.jpg`
 
 ---
 
-## 9. NotificationDispatcher Interface
+## 10. NotificationDispatcher Interface
 
 ```python
 # notifications/base.py
@@ -840,7 +1279,7 @@ If WhatsApp is unavailable (Phase 1 reality):
 
 ---
 
-## 10. Tokenized Links
+## 11. Tokenized Links
 
 ### 10.1 Token Generation
 
@@ -882,7 +1321,7 @@ async def get_tracking(token: str, db: AsyncSession = Depends(get_db)):
 
 ---
 
-## 11. Development Setup (Docker Desktop)
+## 12. Development Setup (Docker Desktop)
 
 ### 11.1 Prerequisites
 
@@ -975,7 +1414,7 @@ See [docker-compose.yml](./docker-compose.yml) — includes health checks, depen
 
 ---
 
-## 12. Testing Strategy
+## 13. Testing Strategy
 
 ### 12.1 Test Types
 
@@ -1005,7 +1444,7 @@ pytest --cov=app --cov-report=html  # Coverage
 
 ---
 
-## 13. Linting & Type Checking
+## 14. Linting & Type Checking
 
 ```bash
 ruff check .                    # Linting
@@ -1016,7 +1455,7 @@ pyright                         # Strict type checking
 
 ---
 
-## 14. Deployment (Phase 1)
+## 15. Deployment (Phase 1)
 
 ### 14.1 Single-VM Topology
 
@@ -1068,7 +1507,7 @@ deliveryflow.yourdomain.com {
 
 ---
 
-## 15. Tracking Updates — Polling Model (Phase 1)
+## 16. Tracking Updates — Polling Model (Phase 1)
 
 Phase 1 uses **HTTP polling** for tracking updates — no WebSocket. This keeps the stack simple and lets us integrate third-party car trackers (GPS providers) via their own webhooks/APIs later.
 
@@ -1097,7 +1536,7 @@ No WebSocket needed — the tracker provider handles their own real-time layer.
 
 ---
 
-## 16. Open Items for Backend
+## 17. Open Items for Backend
 
 - [ ] Pagination strategy (cursor vs offset) — finalize during API implementation.
 - [ ] Rate limiting per tenant — Caddy or FastAPI middleware decision.

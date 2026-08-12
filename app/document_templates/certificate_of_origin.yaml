@@ -1,0 +1,63 @@
+doc_type: CERTIFICATE_OF_ORIGIN
+category: border
+label: Certificate of Origin
+description: SADC or COMESA certificate of origin for preferential tariffs
+version: 1
+confidence_threshold: 0.7
+
+fields:
+  - name: certificate_number
+    type: string
+    required: true
+    description: "Certificate of origin reference number"
+
+  - name: certificate_type
+    type: string
+    required: false
+    allowed_values: ["SADC Form CO", "COMESA", "Bilateral", "Other"]
+    description: "Type of certificate"
+
+  - name: exporter_name
+    type: string
+    required: false
+    description: "Exporter/company name"
+
+  - name: consignee_name
+    type: string
+    required: false
+    description: "Consignee/buyer name"
+
+  - name: country_of_origin
+    type: string
+    required: true
+    description: "Country where goods were produced/manufactured"
+
+  - name: country_of_destination
+    type: string
+    required: false
+
+  - name: goods_description
+    type: string
+    required: false
+
+  - name: hs_code
+    type: string
+    required: false
+    description: "Harmonized System code"
+
+  - name: issue_date
+    type: date
+    required: false
+    format: "YYYY-MM-DD"
+
+  - name: issuing_authority
+    type: string
+    required: false
+    description: "Authorised body (e.g., SARS, dti, ZimTrade)"
+
+visual_hints: |
+  Common layouts:
+  - Official form with stamps and signatures
+  - May include goods description and HS codes
+  - Often has "CERTIFICATE OF ORIGIN" header
+  Look for: certificate number, issuing authority, country of origin, goods description.

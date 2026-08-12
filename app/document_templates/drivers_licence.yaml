@@ -1,0 +1,53 @@
+doc_type: DRIVERS_LICENCE
+category: driver_pack
+label: South African Driver's Licence
+description: South African driver's licence card
+version: 1
+confidence_threshold: 0.7
+
+fields:
+  - name: full_name
+    type: string
+    required: true
+    description: "Full name as shown on licence"
+    examples: ["SMITH JOHN DOE"]
+
+  - name: id_number
+    type: string
+    required: true
+    pattern: "^\\d{13}$"
+    description: "13-digit South African ID number"
+    validation:
+      - type: id_checksum
+        message: "Invalid SA ID number checksum"
+
+  - name: licence_code
+    type: string
+    required: false
+    description: "Licence code (e.g., B, C1, C, EC)"
+    allowed_values: ["B", "B1", "C1", "C", "C EC", "EB", "EB1", "EC"]
+
+  - name: valid_to
+    type: date
+    required: false
+    format: "YYYY-MM-DD"
+    validation:
+      - type: not_expired
+        message: "Driver's licence has expired"
+
+  - name: date_of_birth
+    type: date
+    required: false
+    format: "YYYY-MM-DD"
+
+  - name: gender
+    type: string
+    required: false
+    allowed_values: ["M", "F"]
+
+visual_hints: |
+  Common layouts:
+  - Card-format with photo on left, text on right
+  - 13-digit ID number prominently displayed
+  - Licence codes: B (car), C1 (light truck), C (truck), EC (heavy truck)
+  Look for: name, ID number, photo, licence codes, expiry date.

@@ -1,0 +1,54 @@
+doc_type: COMESA_YELLOW_CARD
+category: border
+label: COMESA Yellow Card
+description: COMESA motor vehicle third-party insurance certificate
+version: 1
+confidence_threshold: 0.7
+
+fields:
+  - name: policy_number
+    type: string
+    required: false
+    description: "Insurance policy number"
+
+  - name: insurer
+    type: string
+    required: true
+    description: "Insurance company name"
+
+  - name: vehicle_registration
+    type: string
+    required: false
+    description: "Vehicle registration number"
+
+  - name: covered_countries
+    type: list
+    required: true
+    description: "List of countries covered (from front page)"
+    examples: [["ZW", "MZ", "ZM", "MW"], ["ZA", "BW", "LS", "NA"]]
+
+  - name: valid_from
+    type: date
+    required: false
+    format: "YYYY-MM-DD"
+
+  - name: valid_to
+    type: date
+    required: true
+    format: "YYYY-MM-DD"
+    validation:
+      - type: not_expired
+        message: "COMESA Yellow Card has expired"
+
+  - name: vehicle_type
+    type: string
+    required: false
+    description: "Type of vehicle (truck, trailer, etc.)"
+
+visual_hints: |
+  Common layouts:
+  - Yellow card format (distinctive colour)
+  - Multi-country list on front page
+  - Hologram or security features
+  Look for: insurer name, covered countries list, validity dates, vehicle reg.
+  Note: USSD verification available via *284*8070#

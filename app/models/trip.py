@@ -69,4 +69,5 @@ class Trip(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     vehicle = relationship("Vehicle")
     invoice = relationship("Invoice", back_populates="trip", uselist=False)
     documents = relationship("Document", back_populates="trip")
+    doc_requirements = relationship("TripDocumentRequirement", back_populates="trip")
     sync_events = relationship("SyncEvent", back_populates="trip")

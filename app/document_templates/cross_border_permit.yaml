@@ -1,0 +1,58 @@
+doc_type: CROSS_BORDER_PERMIT
+category: border
+label: Cross-Border Road Transport Permit
+description: CBRTA or similar cross-border road transport permit
+version: 1
+confidence_threshold: 0.7
+
+fields:
+  - name: permit_number
+    type: string
+    required: true
+    description: "Permit reference number"
+    examples: ["CBRTA/2024/12345"]
+
+  - name: authorised_countries
+    type: list
+    required: true
+    description: "List of countries the permit is valid for"
+    examples: [["ZA", "BW", "ZM"], ["ZA", "ZW", "MZ"]]
+
+  - name: vehicle_registration
+    type: string
+    required: true
+    description: "Vehicle registration number"
+
+  - name: driver_name
+    type: string
+    required: false
+
+  - name: operator_name
+    type: string
+    required: false
+    description: "Transport operator/company name"
+
+  - name: valid_from
+    type: date
+    required: false
+    format: "YYYY-MM-DD"
+
+  - name: valid_to
+    type: date
+    required: true
+    format: "YYYY-MM-DD"
+    validation:
+      - type: not_expired
+        message: "Cross-border permit has expired"
+
+  - name: permit_type
+    type: string
+    required: false
+    description: "Type of permit (annual, single trip, etc.)"
+
+visual_hints: |
+  Common layouts:
+  - Official CBRTA form with borders and stamps
+  - Card-format permit displayed on vehicle
+  - A4 certificate with hologram or security features
+  Look for: permit number, vehicle reg, authorised countries, validity dates.

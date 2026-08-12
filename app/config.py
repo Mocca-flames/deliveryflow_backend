@@ -17,9 +17,9 @@ class Settings(BaseSettings):
 
     # JWT
     JWT_SECRET_KEY: str = "CHANGE-ME-IN-PRODUCTION"
-    JWT_ALGORITHM: str = "RS256"
+    JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
-    JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    JWT_REFRESH_TOKEN_EXPIRES_DAYS: int = 7
 
     # Object Storage (SeaweedFS S3-compatible)
     S3_ENDPOINT: str = "http://localhost:8333"
@@ -35,6 +35,25 @@ class Settings(BaseSettings):
 
     # Driver's Pack
     DRIVERS_PACK_EXPIRY_DAYS: int = 365
+
+    # LLM Document Extraction (multi-provider)
+    LLM_ENABLED: bool = True
+    LLM_PROVIDERS: str = "mistral,google"  # comma-separated priority order
+
+    # Mistral (primary)
+    MISTRAL_API_KEY: str = ""
+    MISTRAL_VISION_MODEL: str = "ministral-14b-latest"
+
+    # Google Gemini (fallback)
+    GOOGLE_API_KEY: str = ""
+    GOOGLE_VISION_MODEL: str = "gemini-2.5-flash"
+
+    # OpenRouter (optional fallback)
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_VISION_MODEL: str = "openai/gpt-4o-mini"
+
+    # LLM concurrency control
+    LLM_MAX_CONCURRENT_PAGES: int = 3
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

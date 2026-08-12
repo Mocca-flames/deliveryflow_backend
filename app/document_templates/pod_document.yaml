@@ -1,0 +1,65 @@
+doc_type: POD_DOCUMENT
+category: pod
+label: Proof of Delivery Document
+description: Signed delivery note, waybill, or consignment note
+version: 1
+confidence_threshold: 0.7
+
+fields:
+  - name: delivery_date
+    type: date
+    required: true
+    format: "YYYY-MM-DD"
+
+  - name: delivered_to
+    type: string
+    required: true
+    description: "Name of person who received the goods"
+
+  - name: receiver_id_number
+    type: string
+    required: false
+    description: "ID number of receiver"
+
+  - name: receiver_designation
+    type: string
+    required: false
+    description: "Job title or role"
+
+  - name: consignment_number
+    type: string
+    required: false
+    description: "Waybill or consignment reference"
+
+  - name: origin
+    type: string
+    required: false
+
+  - name: destination
+    type: string
+    required: false
+
+  - name: cargo_condition
+    type: string
+    required: false
+    allowed_values: ["good", "damaged", "partial", "unknown"]
+
+  - name: damage_notes
+    type: string
+    required: false
+
+  - name: signature_present
+    type: boolean
+    required: true
+
+  - name: items_received
+    type: string
+    required: false
+    description: "List or count of items received"
+
+visual_hints: |
+  Common layouts:
+  - Pre-printed delivery note form with handwritten entries
+  - Carbon copy waybill with stamps and signatures
+  - Digital delivery confirmation printout
+  Look for: date, receiver name, signature, item count, condition notes.

@@ -1,0 +1,63 @@
+doc_type: INSURANCE_LETTER
+category: driver_pack
+label: Insurance Confirmation Letter
+description: Insurance cover confirmation letter from broker or insurer
+version: 1
+confidence_threshold: 0.6
+
+fields:
+  - name: insurer
+    type: string
+    required: true
+    description: "Insurance company name"
+    examples: ["Santam", "Hollard", "Old Mutual", "Direct Short-term"]
+
+  - name: is_legit
+    type: boolean
+    required: true
+    description: "True if document contains insurance terminology (Insured, Policy Number, Cover)"
+    validation:
+      - type: equals
+        value: true
+        message: "Document does not appear to be a valid insurance letter"
+
+  - name: insured_name
+    type: string
+    required: false
+    description: "Policyholder name (person or company)"
+
+  - name: registration_number
+    type: list
+    required: false
+    description: "Vehicle registration plate(s) covered"
+
+  - name: cover_type
+    type: string
+    required: false
+    description: "Type of cover"
+    allowed_values: ["Comprehensive", "Third Party", "Third Party Fire & Theft"]
+
+  - name: sum_insured
+    type: string
+    required: false
+    description: "Sum insured amount (e.g., R500 000)"
+
+  - name: policy_number
+    type: string
+    required: false
+    description: "Policy reference number"
+
+  - name: valid_to
+    type: date
+    required: false
+    format: "YYYY-MM-DD"
+    validation:
+      - type: not_expired
+        message: "Insurance cover has expired"
+
+visual_hints: |
+  Common layouts:
+  - Letterhead from insurance company or broker
+  - Table with vehicle details and cover amounts
+  - Terms and conditions at bottom
+  Look for: insurer name, policy number, vehicle reg, cover type, sum insured, dates.
