@@ -9,6 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from app.config import get_settings
 from app.models.user import User
 from app.models.tenant import Tenant
+from app.notifications.email.brevo import BrevoProvider
+from app.notifications.email.mailjet import MailjetProvider
+from app.notifications.email.router import EmailRouter
 
 settings = get_settings()
 
@@ -17,10 +20,28 @@ async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit
 
 security = HTTPBearer()
 
+_email_router: EmailRouter | None = None
+
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with async_session() as session:
         yield session
+
+
+def get_email_router() -> EmailRouter:
+    """Get or create the singleton EmailRouter with configured providers."""
+    global _email_router
+    if _email_router is None:
+        providers = []
+        brevo = BrevoProvider()
+        mailjet = MailjetProvider()
+        if settings.EMAIL_ENABLED:
+            if brevo.is_configured():
+                providers.append(brevo)
+            if mailjet.is_configured():
+                providers.append(mailjet)
+        _email_router = EmailRouter(providers)
+    return _email_router
 
 
 async def get_current_user(

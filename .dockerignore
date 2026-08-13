@@ -19,9 +19,12 @@ build
 htmlcov
 coverage
 *.cover
-tests
 docs
 *.md
 !README.md
 .vscode
 .idea
+
+# Keep the smoke-test files available inside the Docker image
+!tests/
+!tests/**/*.py

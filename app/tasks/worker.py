@@ -2,13 +2,14 @@
 Taskiq background tasks — notifications, driver pack expiry, sync processing.
 """
 from taskiq import TaskiqMessage, TaskiqResult, TaskiqMiddleware
-from taskiq_redis import RedisBroker
+from taskiq_redis import RedisStreamBroker, RedisAsyncResultBackend
 
 from app.config import get_settings
 
 settings = get_settings()
 
-broker = RedisBroker(url=settings.REDIS_URL)
+result_backend = RedisAsyncResultBackend(redis_url=settings.REDIS_URL)
+broker = RedisStreamBroker(url=settings.REDIS_URL).with_result_backend(result_backend)
 
 
 class DatabaseMiddleware(TaskiqMiddleware):
@@ -25,7 +26,7 @@ class DatabaseMiddleware(TaskiqMiddleware):
         pass
 
 
-broker.add_middleware(DatabaseMiddleware())
+broker.add_middlewares(DatabaseMiddleware())
 
 
 @broker.task

@@ -13,14 +13,14 @@ backend/
 ├── app/
 │   ├── __init__.py
 │   ├── main.py                  # FastAPI app factory, lifespan, middleware
-│   ├── config.py                # Pydantic Settings (env-based config)
-│   ├── deps.py                  # Dependency injection (get_db, get_current_user, get_tenant)
+│   ├── config.py                # Pydantic Settings (env-based config, email services, OTP settings)
+│   ├── deps.py                  # Dependency injection (get_db, get_current_user, get_tenant, get_email_router)
 │   │
 │   ├── models/                  # SQLAlchemy 2.0 ORM models
 │   │   ├── __init__.py
 │   │   ├── base.py              # Base model, mixins (TimestampMixin, UUIDPrimaryKey)
 │   │   ├── tenant.py            # Tenant (broker) model
-│   │   ├── user.py              # User model (broker staff, platform admin)
+│   │   ├── user.py              # User model (broker staff, platform admin, OTP fields, email verification)
 │   │   ├── carrier.py           # Carrier (lightweight, under broker tenant)
 │   │   ├── driver.py            # Driver (linked to carrier)
 │   │   ├── vehicle.py           # Vehicle (linked to carrier)
@@ -35,7 +35,7 @@ backend/
 │   ├── schemas/                 # Pydantic v2 request/response schemas
 │   │   ├── __init__.py
 │   │   ├── common.py            # Shared schemas (Pagination, ErrorResponse)
-│   │   ├── auth.py              # Login, token refresh
+│   │   ├── auth.py              # Login, token refresh, OTP, register, password reset
 │   │   ├── tenant.py
 │   │   ├── carrier.py
 │   │   ├── driver.py
@@ -51,7 +51,7 @@ backend/
 │   │   ├── v1/
 │   │   │   ├── __init__.py
 │   │   │   ├── router.py        # v1 API router aggregation
-│   │   │   ├── auth.py          # POST /auth/login, /auth/refresh
+│   │   │   ├── auth.py          # POST /auth/login, /auth/refresh, /auth/register, /auth/verify-otp, /auth/resend-otp, /auth/forgot-password, /auth/reset-password, GET /auth/me
 │   │   │   ├── tenants.py       # CRUD (super-admin only)
 │   │   │   ├── users.py         # CRUD (tenant-scoped)
 │   │   │   ├── carriers.py      # CRUD under tenant
@@ -93,6 +93,7 @@ backend/
 │   ├── services/                # Business logic layer
 │   │   ├── __init__.py
 │   │   ├── auth.py              # Authentication service
+│   │   ├── otp.py               # OTP generation, verification, email sending
 │   │   ├── trip.py              # Trip lifecycle service
 │   │   ├── invoice.py           # Invoice service (milestone transitions, 70/30 split)
 │   │   ├── document.py          # Document upload, storage, retrieval
@@ -121,8 +122,13 @@ backend/
 │   │   ├── base.py              # Abstract Notifier interface
 │   │   ├── whatsapp.py          # Meta Cloud API adapter (Phase 2)
 │   │   ├── sms.py               # SMS adapter (stub for future)
-│   │   ├── email.py             # Email adapter (stub for future)
-│   │   └── console.py           # Console adapter (dev/debug)
+│   │   ├── console.py           # Console adapter (dev/debug)
+│   │   └── email/               # Dual-provider email (Brevo + Mailjet)
+│   │       ├── __init__.py
+│   │       ├── base.py          # Abstract EmailProvider + QuotaExceededError
+│   │       ├── brevo.py         # Brevo API v3 adapter
+│   │   ├── mailjet.py       # Mailjet API v3 adapter
+│   │       └── router.py        # EmailRouter — random selection + depletion fallback
 │   │
 │   ├── storage/                 # Object storage abstraction
 │   │   ├── __init__.py
@@ -145,6 +151,7 @@ backend/
 ├── tests/
 │   ├── __init__.py
 │   ├── conftest.py              # Fixtures, test DB setup
+│   ├── test_brevo_email.py      # Email provider integration test
 │   ├── test_models/
 │   ├── test_api/
 │   ├── test_services/
@@ -1045,6 +1052,12 @@ app/document_templates/
 |--------|----------|------|-------------|
 | POST | `/api/v1/auth/login` | None | Returns JWT access + refresh tokens |
 | POST | `/api/v1/auth/refresh` | Refresh token | Returns new access token |
+| GET | `/api/v1/auth/me` | Bearer JWT | Returns current user info |
+| POST | `/api/v1/auth/register` | None | Create account + send verification OTP |
+| POST | `/api/v1/auth/verify-otp` | None | Verify OTP + mark email verified |
+| POST | `/api/v1/auth/resend-otp` | None | Resend verification OTP |
+| POST | `/api/v1/auth/forgot-password` | None | Send password reset OTP |
+| POST | `/api/v1/auth/reset-password` | None | Reset password with OTP |
 
 ### 6.2 Tenant-Scoped CRUD
 
@@ -1265,9 +1278,9 @@ class Notifier(ABC):
 | Adapter | Status | Notes |
 |---------|--------|-------|
 | `ConsoleNotifier` | **Active** | Logs to stdout — default for dev |
+| `EmailRouter` | **Active** | Dual-provider (Brevo + Mailjet), random selection, depletion fallback |
 | `WhatsAppNotifier` | **Stub** | Meta Cloud API — Phase 2, interface ready |
 | `SMSNotifier` | **Stub** | Placeholder for future |
-| `EmailNotifier` | **Stub** | Placeholder for future |
 
 ### 9.2 WhatsApp Down Scenario
 

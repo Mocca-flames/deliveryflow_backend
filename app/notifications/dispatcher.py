@@ -53,5 +53,5 @@ class NotificationDispatcher:
 
 
 # Singleton dispatcher
-dispatcher = NotificationDispatcher()
-dispatcher.register(ConsoleNotifier())
+notification_dispatcher = NotificationDispatcher()
+notification_dispatcher.register(ConsoleNotifier())

@@ -13,13 +13,15 @@
 | Module | Status | Notes |
 |--------|--------|-------|
 | `app/main.py` | **DONE** | FastAPI app factory, CORS, route mounting |
-| `app/config.py` | **DONE** | Pydantic Settings, all env vars |
-| `app/deps.py` | **DONE** | JWT auth, tenant extraction, role checks |
+| `app/config.py` | **DONE** | Pydantic Settings, all env vars, email service config |
+| `app/deps.py` | **DONE** | JWT auth, tenant extraction, role checks, email router |
 | `app/models/*` | **DONE** | All 12 ORM models (User, Tenant, Trip, Invoice, etc.) |
 | `app/schemas/*` | **DONE** | All Pydantic v2 request/response schemas |
 | `app/state_machines/*` | **DONE** | Invoice milestone + Driver's Pack state machines |
 | `app/core/*` | **DONE** | Token gen, currency validation, SADC doc registry, exceptions |
 | `app/notifications/*` | **DONE** | Abstract notifier + console adapter + dispatcher |
+| `app/notifications/email/*` | **DONE** | Brevo + Mailjet adapters, EmailRouter with random selection + depletion fallback |
+| `app/services/otp.py` | **DONE** | OTP generation, verification, email sending |
 | `app/storage/*` | **DONE** | SeaweedFS S3 adapter |
 
 ---
@@ -60,12 +62,26 @@ backend/
 │   ├── services/                    # NEW — Business logic layer
 │   │   ├── __init__.py
 │   │   ├── auth.py                  # Login, token refresh, password hashing
+│   │   ├── otp.py                   # OTP generation, verification, email sending
 │   │   ├── trip.py                  # Trip lifecycle operations
 │   │   ├── invoice.py               # Invoice operations + milestone transitions
 │   │   ├── document.py              # Upload, storage, retrieval
 │   │   ├── drivers_pack.py          # KYC orchestration (uses reference_copy OCR)
 │   │   ├── pdf_generator.py         # WeasyPrint PDF service
 │   │   └── notification.py          # Notification dispatch wrapper
+│   │
+│   ├── notifications/               # NEW — Pluggable notifier adapters
+│   │   ├── __init__.py
+│   │   ├── base.py                  # Abstract Notifier interface
+│   │   ├── console.py               # Console adapter (dev/debug)
+│   │   ├── whatsapp.py              # Meta Cloud API adapter (Phase 2)
+│   │   ├── sms.py                   # SMS adapter (stub for future)
+│   │   └── email/                   # Dual-provider email (Brevo + Mailjet)
+│   │       ├── __init__.py
+│   │       ├── base.py              # Abstract EmailProvider + QuotaExceededError
+│   │       ├── brevo.py             # Brevo API v3 adapter
+│   │       ├── mailjet.py           # Mailjet API v3 adapter
+│   │       └── router.py            # EmailRouter — random selection + depletion fallback
 │   │
 │   ├── templates/                   # NEW — Jinja2 HTML templates for PDFs
 │   │   ├── base.html                # Base layout (header, footer, CSS)
@@ -95,7 +111,7 @@ backend/
 │   │       └── licence.py           # Licence validation
 │   │
 │   ├── api/v1/                      # EXISTING — implement stubs
-│   │   ├── auth.py                  # Wire up real auth
+│   │   ├── auth.py                  # Login, refresh, register, verify-otp, resend-otp, forgot-password, reset-password, me
 │   │   ├── trips.py                 # Wire up trip CRUD + lifecycle
 │   │   ├── invoices.py              # Wire up invoice ops + PDF download
 │   │   ├── drivers_packs.py         # Wire up KYC submission + review
@@ -464,6 +480,12 @@ alembic upgrade head
 |----------|--------|----------------|
 | `/api/v1/auth/login` | POST | Real JWT auth with passlib |
 | `/api/v1/auth/refresh` | POST | Token refresh |
+| `/api/v1/auth/me` | GET | Current user info |
+| `/api/v1/auth/register` | POST | Create account + send verification OTP |
+| `/api/v1/auth/verify-otp` | POST | Verify OTP + mark email verified |
+| `/api/v1/auth/resend-otp` | POST | Resend verification OTP |
+| `/api/v1/auth/forgot-password` | POST | Send password reset OTP |
+| `/api/v1/auth/reset-password` | POST | Reset password with OTP |
 | `/api/v1/trips/` | GET/POST | CRUD with pagination |
 | `/api/v1/trips/{id}` | GET | Trip detail |
 | `/api/v1/trips/{id}/award-contract` | POST | Award + validate driver pack |

@@ -158,6 +158,27 @@ def upgrade() -> None:
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
 
+    # Drivers Packs (created before documents because documents and packs both reference each other)
+    op.create_table(
+        'drivers_packs',
+        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
+        sa.Column('tenant_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('tenants.id'), nullable=False),
+        sa.Column('driver_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('drivers.id'), nullable=True),
+        sa.Column('vehicle_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('vehicles.id'), nullable=True),
+        sa.Column('status', sa.String(), nullable=False, server_default='pending'),
+        sa.Column('submitted_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('verified_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('flagged_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('cleared_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('expires_at', sa.DateTime(timezone=True), nullable=True),
+        sa.Column('reviewed_by', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id'), nullable=True),
+        sa.Column('review_notes', sa.Text(), nullable=True),
+        sa.Column('ocr_cross_check', postgresql.JSONB(), nullable=True),
+        sa.Column('ocr_pass', sa.Boolean(), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
+    )
+
     # Documents
     op.create_table(
         'documents',
@@ -181,6 +202,11 @@ def upgrade() -> None:
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
     )
 
+    op.add_column('drivers_packs', sa.Column('vehicle_licence_doc_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('documents.id'), nullable=True))
+    op.add_column('drivers_packs', sa.Column('drivers_licence_doc_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('documents.id'), nullable=True))
+    op.add_column('drivers_packs', sa.Column('id_document_doc_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('documents.id'), nullable=True))
+    op.add_column('drivers_packs', sa.Column('insurance_letter_doc_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('documents.id'), nullable=True))
+
     # Trip Document Requirements
     op.create_table(
         'trip_document_requirements',
@@ -196,31 +222,6 @@ def upgrade() -> None:
         sa.Column('notes', sa.Text(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
         sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False),
-    )
-
-    # Drivers Packs (create before documents since documents references it)
-    op.create_table(
-        'drivers_packs',
-        sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column('tenant_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('tenants.id'), nullable=False),
-        sa.Column('driver_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('drivers.id'), nullable=True),
-        sa.Column('vehicle_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('vehicles.id'), nullable=True),
-        sa.Column('status', sa.String(), nullable=False, server_default='pending'),
-        sa.Column('submitted_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('verified_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('flagged_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('cleared_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('expires_at', sa.DateTime(timezone=True), nullable=True),
-        sa.Column('reviewed_by', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id'), nullable=True),
-        sa.Column('review_notes', sa.Text(), nullable=True),
-        sa.Column('vehicle_licence_doc_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('documents.id'), nullable=True),
-        sa.Column('drivers_licence_doc_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('documents.id'), nullable=True),
-        sa.Column('id_document_doc_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('documents.id'), nullable=True),
-        sa.Column('insurance_letter_doc_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('documents.id'), nullable=True),
-        sa.Column('ocr_cross_check', postgresql.JSONB(), nullable=True),
-        sa.Column('ocr_pass', sa.Boolean(), nullable=True),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.func.now()),
     )
 
     # Sync Events

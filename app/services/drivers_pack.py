@@ -1,6 +1,8 @@
 """
 Driver's Pack service — KYC orchestration, review queue, state transitions.
 """
+from __future__ import annotations
+
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 

@@ -27,6 +27,8 @@ services:
         condition: service_healthy
       seaweed-s3:
         condition: service_started
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
     networks:
       - df-network
@@ -64,6 +66,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
     networks:
       - df-network
@@ -80,6 +84,7 @@ services:
       POSTGRES_DB: deliveryflow
       POSTGRES_USER: df_user
       POSTGRES_PASSWORD: df_password
+      POSTGRES_HOST_AUTH_METHOD: trust
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -132,6 +137,18 @@ services:
     networks:
       - df-network
 
+  seaweed-filer:
+    image: chrislusf/seaweedfs:latest
+    container_name: df-seaweed-filer
+    command: "filer -master=seaweed-master:9333 -port=8888"
+    depends_on:
+      - seaweed-master
+    volumes:
+      - seaweedfiler:/data
+    restart: unless-stopped
+    networks:
+      - df-network
+
   seaweed-s3:
     image: chrislusf/seaweedfs:latest
     container_name: df-seaweed-s3
@@ -140,9 +157,9 @@ services:
     environment:
       - AWS_ACCESS_KEY_ID=seaweed
       - AWS_SECRET_ACCESS_KEY=seaweed
-    command: "s3 -port=8333 -master.url=http://seaweed-master:9333"
+    command: "s3 -port=8333 -filer=seaweed-filer:8888"
     depends_on:
-      - seaweed-master
+      - seaweed-filer
     restart: unless-stopped
     networks:
       - df-network
@@ -152,6 +169,7 @@ volumes:
   redisdata:
   seaweedmaster:
   seaweedvol:
+  seaweedfiler:
 
 networks:
   df-network:

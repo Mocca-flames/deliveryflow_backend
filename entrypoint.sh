@@ -7,8 +7,12 @@ while ! pg_isready -h postgres -p 5432 -U df_user -d deliveryflow -q; do
 done
 echo "PostgreSQL is ready."
 
-echo "Running Alembic migrations..."
-alembic upgrade head
+# If a command is passed (e.g. "alembic upgrade head" for the migrate service,
+# or "taskiq worker ..." for the taskiq-worker service), run it.
+# Otherwise start the API application.
+if [ "$#" -gt 0 ]; then
+  exec "$@"
+fi
 
 echo "Starting application..."
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000

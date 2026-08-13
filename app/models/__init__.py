@@ -9,10 +9,12 @@ from app.models.document import Document, TripDocumentRequirement
 from app.models.drivers_pack import DriversPack
 from app.models.notification_log import NotificationLog
 from app.models.sync_event import SyncEvent
+from app.models.enums import BusinessType
 
 __all__ = [
     "Tenant", "User", "Carrier", "Driver", "Vehicle",
     "Trip", "Invoice", "InvoiceMilestone",
     "Document", "TripDocumentRequirement",
     "DriversPack", "NotificationLog", "SyncEvent",
+    "BusinessType",
 ]

@@ -33,6 +33,20 @@ class Settings(BaseSettings):
     WHATSAPP_PHONE_NUMBER_ID: str = ""
     WHATSAPP_VERIFY_TOKEN: str = ""
 
+    # Email Services
+    BREVO_API_KEY: str = ""
+    BREVO_SENDER_EMAIL: str = ""
+    BREVO_SENDER_NAME: str = "DeliveryFlow"
+
+    MAILJET_API_KEY: str = ""
+    MAILJET_API_SECRET: str = ""
+    MAILJET_SENDER_EMAIL: str = ""
+    MAILJET_SENDER_NAME: str = "DeliveryFlow"
+
+    EMAIL_ENABLED: bool = True
+    OTP_EXPIRY_MINUTES: int = 10
+    OTP_LENGTH: int = 6
+
     # Driver's Pack
     DRIVERS_PACK_EXPIRY_DAYS: int = 365
 
