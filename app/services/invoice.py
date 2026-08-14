@@ -20,6 +20,8 @@ class InvoiceService:
 
     async def create(self, tenant_id: UUID, trip_id: UUID) -> Invoice:
         """Create invoice for a trip (auto-generates 70/30 split)."""
+        from datetime import timedelta
+
         # Fetch trip for reference
         trip = await self.db.get(Trip, trip_id)
         if trip is None:
@@ -31,6 +33,9 @@ class InvoiceService:
         now = datetime.now(timezone.utc)
         invoice_number = f"INV-{trip.reference}-{now.strftime('%Y%m%d')}"
 
+        # Set due date to 30 days from now
+        due_date = now + timedelta(days=30)
+
         invoice = Invoice(
             tenant_id=tenant_id,
             trip_id=trip_id,
@@ -41,6 +46,7 @@ class InvoiceService:
             upfront_pct=Decimal("70.00"),
             balance_pct=Decimal("30.00"),
             current_milestone="draft",
+            due_date=due_date,
             created_at=now,
             updated_at=now,
         )
@@ -76,9 +82,18 @@ class InvoiceService:
 
     async def get(self, invoice_id: UUID, tenant_id: UUID) -> Invoice | None:
         """Get an invoice by ID."""
-        stmt = select(Invoice).where(
-            Invoice.id == invoice_id,
-            Invoice.tenant_id == tenant_id,
+        from sqlalchemy.orm import selectinload
+
+        stmt = (
+            select(Invoice)
+            .where(
+                Invoice.id == invoice_id,
+                Invoice.tenant_id == tenant_id,
+            )
+            .options(
+                selectinload(Invoice.trip).selectinload(Trip.tenant),
+                selectinload(Invoice.milestones),
+            )
         )
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()

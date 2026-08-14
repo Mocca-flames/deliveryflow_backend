@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="header">
+    <div class="company-info">
+        {% if logo_base64 %}
+        <div class="company-logo">
+            <img src="{{ logo_base64 }}" alt="{{ company.name }}" style="max-height: 60px; max-width: 200px;">
+        </div>
+        {% endif %}
+        <div class="company-name">{{ company.name }}</div>
+        <div class="company-details">
+            {{ company.address }}<br>
+            {{ company.city }}, {{ company.postal_code }}<br>
+            {{ company.country }}<br>
+            Tel: {{ company.phone }}<br>
+            Email: {{ company.email }}
+            {% if company.website %}<br>Web: {{ company.website }}{% endif %}
+        </div>
+    </div>
+    <div class="document-title">
+        <h1>LOAD CONFIRMATION</h1>
+        <div class="document-number">{{ load_number }}</div>
+    </div>
+</div>
+
+<div class="parties">
+    <div class="from">
+        <div class="label">Freight Broker</div>
+        <div class="address">
+            <strong>{{ company.name }}</strong><br>
+            {{ company.address }}<br>
+            {{ company.city }}, {{ company.postal_code }}<br>
+            Registration: {{ company.registration_number }}
+        </div>
+    </div>
+    <div class="to">
+        <div class="label">Carrier (Transporter)</div>
+        <div class="address">
+            <strong>{{ carrier.name }}</strong><br>
+            {% if carrier.contact_name %}Contact: {{ carrier.contact_name }}<br>{% endif %}
+            {% if carrier.contact_phone %}Phone: {{ carrier.contact_phone }}<br>{% endif %}
+            {% if carrier.email %}Email: {{ carrier.email }}{% endif %}
+        </div>
+    </div>
+</div>
+
+<table class="meta-table">
+    <tr>
+        <td class="label">Confirmation Date:</td>
+        <td>{{ confirmation_date }}</td>
+        <td class="label">Trip Reference:</td>
+        <td>{{ trip_reference }}</td>
+    </tr>
+    <tr>
+        <td class="label">Pickup Date:</td>
+        <td>{{ pickup_date }}</td>
+        <td class="label">Delivery Date:</td>
+        <td>{{ delivery_date }}</td>
+    </tr>
+    <tr>
+        <td class="label">Route:</td>
+        <td>{{ origin }} → {{ destination }}</td>
+        <td class="label">Status:</td>
+        <td>{{ status }}</td>
+    </tr>
+</table>
+
+<div class="notes">
+    <div class="label">1. Load Details</div>
+    <div class="content">
+        <strong>Cargo Description:</strong> {{ cargo_desc }}<br>
+        {% if cargo_weight_kg %}<strong>Gross Weight:</strong> {{ cargo_weight_kg }} kg<br>{% endif %}
+        <strong>Packaging:</strong> {{ packaging_type|default("Standard") }}<br>
+        {% if special_instructions %}<strong>Special Instructions:</strong> {{ special_instructions }}{% endif %}
+    </div>
+</div>
+
+<div class="notes">
+    <div class="label">2. Pickup Information</div>
+    <div class="content">
+        <strong>Shipper:</strong> {{ shipper_name }}<br>
+        <strong>Address:</strong> {{ pickup_address }}<br>
+        <strong>Contact:</strong> {{ shipper_contact }}<br>
+        <strong>Pickup Window:</strong> {{ pickup_window }}
+    </div>
+</div>
+
+<div class="notes">
+    <div class="label">3. Delivery Information</div>
+    <div class="content">
+        <strong>Consignee:</strong> {{ consignee_name }}<br>
+        <strong>Address:</strong> {{ delivery_address }}<br>
+        <strong>Contact:</strong> {{ consignee_contact }}<br>
+        <strong>Delivery Window:</strong> {{ delivery_window }}
+    </div>
+</div>
+
+<div class="notes">
+    <div class="label">4. Vehicle & Driver Requirements</div>
+    <div class="content">
+        <strong>Vehicle Type:</strong> {{ vehicle_type }}<br>
+        <strong>Trailer Type:</strong> {{ trailer_type }}<br>
+        {% if driver_name %}<strong>Assigned Driver:</strong> {{ driver_name }}<br>{% endif %}
+        {% if driver_license %}<strong>Driver License:</strong> {{ driver_license }}{% endif %}
+    </div>
+</div>
+
+<div class="notes">
+    <div class="label">5. Financial Terms</div>
+    <div class="content">
+        <strong>Agreed Rate:</strong> {{ agreed_rate|currency(currency) }}<br>
+        <strong>Currency:</strong> {{ currency }}<br>
+        <strong>Payment Terms:</strong> {{ payment_terms }}<br>
+        <strong>Fuel Surcharge:</strong> {{ fuel_surcharge|currency(currency)|default("Included") }}
+    </div>
+</div>
+
+<div class="notes">
+    <div class="label">6. Required Documents at Pickup</div>
+    <div class="content">
+        {% for doc in required_documents %}
+        • {{ doc }}<br>
+        {% endfor %}
+    </div>
+</div>
+
+<div class="notes">
+    <div class="label">7. Important Instructions</div>
+    <div class="content">
+        • Driver must present valid ID and license at pickup<br>
+        • All cross-border documentation must be complete before departure<br>
+        • Proof of Delivery (POD) must be uploaded via DeliveryFlow platform<br>
+        • Any delays must be reported immediately to the broker
+    </div>
+</div>
+
+{% if notes %}
+<div class="notes">
+    <div class="label">Additional Notes</div>
+    <div class="content">{{ notes }}</div>
+</div>
+{% endif %}
+
+<div class="signature-block">
+    <div class="signee">
+        <div class="line"></div>
+        <div class="label">Broker — {{ company.name }}</div>
+        <div class="label">Date: _______________</div>
+    </div>
+    <div class="signee">
+        <div class="line"></div>
+        <div class="label">Carrier — {{ carrier.name }}</div>
+        <div class="label">Date: _______________</div>
+    </div>
+</div>
+
+<div class="footer">
+    {{ company.name }} — {{ company.registration_number }}<br>
+    {% if load_confirmation_footer %}
+    {{ load_confirmation_footer }}
+    {% else %}
+    Load confirmation generated by DeliveryFlow. This document constitutes a binding agreement.
+    {% endif %}
+</div>
+{% endblock %}

@@ -12,6 +12,10 @@ class TripCreate(BaseModel):
     client_name: str | None = None
     client_email: str | None = None
     client_phone: str | None = None
+    client_address: str | None = None
+    client_city: str | None = None
+    client_postal_code: str | None = None
+    client_country: str | None = None
     cargo_desc: str | None = None
     cargo_weight_kg: Decimal | None = None
     quoted_amount: Decimal | None = None
@@ -30,6 +34,13 @@ class TripResponse(BaseModel):
     carrier_id: UUID | None = None
     driver_id: UUID | None = None
     vehicle_id: UUID | None = None
+    client_name: str | None = None
+    client_email: str | None = None
+    client_phone: str | None = None
+    client_address: str | None = None
+    client_city: str | None = None
+    client_postal_code: str | None = None
+    client_country: str | None = None
     quoted_amount: Decimal | None = None
     currency: str = "ZAR"
     tracking_token: str | None = None

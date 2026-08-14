@@ -4,6 +4,32 @@
     <meta charset="utf-8">
     <title>{{ document_title }} — {{ document_number }}</title>
     <link rel="stylesheet" href="css/document.css">
+    {% if primary_color %}
+    <style>
+        :root {
+            --primary-color: {{ primary_color }};
+        }
+        .header {
+            border-bottom-color: var(--primary-color);
+        }
+        .company-name {
+            color: var(--primary-color);
+        }
+        .document-title h1 {
+            color: var(--primary_color);
+        }
+        .line-items th {
+            background-color: var(--primary-color);
+        }
+        .totals tr.grand-total td {
+            color: var(--primary-color);
+            border-top-color: var(--primary-color);
+        }
+        .notes {
+            border-left-color: var(--primary-color);
+        }
+    </style>
+    {% endif %}
 </head>
 <body>
     <div class="document">

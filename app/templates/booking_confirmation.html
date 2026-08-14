@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="header">
+    <div class="company-info">
+        {% if logo_base64 %}
+        <div class="company-logo">
+            <img src="{{ logo_base64 }}" alt="{{ company.name }}" style="max-height: 60px; max-width: 200px;">
+        </div>
+        {% endif %}
+        <div class="company-name">{{ company.name }}</div>
+        <div class="company-details">
+            {{ company.address }}<br>
+            {{ company.city }}, {{ company.postal_code }}<br>
+            {{ company.country }}<br>
+            Tel: {{ company.phone }}<br>
+            Email: {{ company.email }}
+            {% if company.website %}<br>Web: {{ company.website }}{% endif %}
+        </div>
+    </div>
+    <div class="document-title">
+        <h1>BOOKING CONFIRMATION</h1>
+        <div class="document-number">{{ booking_number }}</div>
+    </div>
+</div>
+
+<div class="parties">
+    <div class="from">
+        <div class="label">Freight Broker</div>
+        <div class="address">
+            <strong>{{ company.name }}</strong><br>
+            {{ company.address }}<br>
+            {{ company.city }}, {{ company.postal_code }}<br>
+            Registration: {{ company.registration_number }}
+        </div>
+    </div>
+    <div class="to">
+        <div class="label">Client (Shipper)</div>
+        <div class="address">
+            <strong>{{ client.name }}</strong><br>
+            {% if client.company %}{{ client.company }}<br>{% endif %}
+            {{ client.address }}<br>
+            {{ client.city }}, {{ client.postal_code }}<br>
+            {{ client.country }}
+        </div>
+    </div>
+</div>
+
+<table class="meta-table">
+    <tr>
+        <td class="label">Booking Date:</td>
+        <td>{{ booking_date }}</td>
+        <td class="label">Trip Reference:</td>
+        <td>{{ trip_reference }}</td>
+    </tr>
+    <tr>
+        <td class="label">Pickup Window:</td>
+        <td>{{ pickup_date }}</td>
+        <td class="label">Expected Delivery:</td>
+        <td>{{ delivery_date }}</td>
+    </tr>
+    <tr>
+        <td class="label">Route:</td>
+        <td>{{ origin }} → {{ destination }}</td>
+        <td class="label">Status:</td>
+        <td>{{ status }}</td>
+    </tr>
+</table>
+
+<div class="notes">
+    <div class="label">1. Carrier Details</div>
+    <div class="content">
+        <strong>Carrier:</strong> {{ carrier.name }}<br>
+        {% if carrier.contact_name %}<strong>Contact:</strong> {{ carrier.contact_name }}<br>{% endif %}
+        {% if carrier.contact_phone %}<strong>Phone:</strong> {{ carrier.contact_phone }}<br>{% endif %}
+        {% if carrier.email %}<strong>Email:</strong> {{ carrier.email }}{% endif %}
+    </div>
+</div>
+
+<div class="notes">
+    <div class="label">2. Vehicle & Driver Assignment</div>
+    <div class="content">
+        <strong>Vehicle Registration:</strong> {{ vehicle_registration }}<br>
+        {% if trailer_registration %}<strong>Trailer Registration:</strong> {{ trailer_registration }}<br>{% endif %}
+        <strong>Driver Name:</strong> {{ driver_name }}<br>
+        <strong>Driver License:</strong> {{ driver_license }}
+    </div>
+</div>
+
+<div class="notes">
+    <div class="label">3. Cargo Details</div>
+    <div class="content">
+        <strong>Description:</strong> {{ cargo_desc }}<br>
+        {% if cargo_weight_kg %}<strong>Weight:</strong> {{ cargo_weight_kg }} kg<br>{% endif %}
+        <strong>Packaging:</strong> {{ packaging_type|default("Standard") }}<br>
+        {% if special_instructions %}<strong>Special Instructions:</strong> {{ special_instructions }}{% endif %}
+    </div>
+</div>
+
+<div class="notes">
+    <div class="label">4. Financial Summary</div>
+    <div class="content">
+        <strong>Quoted Amount:</strong> {{ quoted_amount|currency(currency) }}<br>
+        <strong>Currency:</strong> {{ currency }}<br>
+        <strong>Payment Terms:</strong> {{ payment_terms }}
+    </div>
+</div>
+
+<div class="notes">
+    <div class="label">5. Booking Reference Numbers</div>
+    <div class="content">
+        <strong>Booking Reference:</strong> {{ booking_reference }}<br>
+        <strong>Client Reference:</strong> {{ client_reference|default("N/A") }}<br>
+        <strong>Carrier Reference:</strong> {{ carrier_reference|default("N/A") }}
+    </div>
+</div>
+
+{% if notes %}
+<div class="notes">
+    <div class="label">Additional Notes</div>
+    <div class="content">{{ notes }}</div>
+</div>
+{% endif %}
+
+<div class="footer">
+    {{ company.name }} — {{ company.registration_number }}<br>
+    {% if booking_footer %}
+    {{ booking_footer }}
+    {% else %}
+    This booking confirmation is issued by DeliveryFlow. For queries, contact {{ company.email }}
+    {% endif %}
+</div>
+{% endblock %}

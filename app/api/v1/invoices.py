@@ -126,20 +126,70 @@ async def get_invoice_pdf(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
 
     try:
-        pdf_bytes = await pdf_generator.generate_invoice(
-            invoice_number=invoice.invoice_number,
-            issued_date=invoice.issued_at.strftime("%d %B %Y") if invoice.issued_at else "N/A",
-            due_date="",
-            from_party={"name": "DeliveryFlow", "address": "", "reg": ""},
-            to_party={"name": "", "address": "", "reg": ""},
-            route={"origin": invoice.trip.origin, "destination": invoice.trip.destination},
-            line_items=[{"description": f"Freight - {invoice.trip.reference}", "qty": 1, "unit_price": invoice.total_amount, "total": invoice.total_amount}],
-            subtotal=invoice.total_amount,
-            tax=0,
-            grand_total=invoice.total_amount,
-            payment_terms=f"{invoice.upfront_pct}% upfront, {invoice.balance_pct}% on completion",
-            notes=invoice.notes or "",
-        )
+        # Build data structure matching the invoice.html template
+        # Get tenant info for company details
+        tenant = invoice.trip.tenant if invoice.trip else None
+        tenant_settings = tenant.settings if tenant else {}
+        branding = tenant_settings.get("branding", {})
+        
+        # Get logo base64 if available
+        logo_base64 = ""
+        if branding.get("logo_storage_key"):
+            from app.services.pdf_generator import pdf_generator
+            logo_base64 = pdf_generator._get_base64_logo(branding["logo_storage_key"])
+
+        data = {
+            "document_title": "INVOICE",
+            "document_number": invoice.invoice_number,
+            "primary_color": branding.get("primary_color", "#2c5aa0"),
+            "logo_base64": logo_base64,
+            "company": {
+                "name": tenant.name if tenant else "DeliveryFlow",
+                "address": tenant_settings.get("address", "123 Freight Street"),
+                "city": tenant_settings.get("city", "Johannesburg"),
+                "postal_code": tenant_settings.get("postal_code", "2000"),
+                "country": tenant_settings.get("country", "South Africa"),
+                "phone": tenant_settings.get("phone", "+27 11 123 4567"),
+                "email": tenant_settings.get("email", "billing@deliveryflow.co.za"),
+                "website": tenant_settings.get("website"),
+                "registration_number": tenant_settings.get("registration_number", "2024/123456/07"),
+                "tax_number": tenant_settings.get("tax_number"),
+            },
+            "client": {
+                "name": invoice.trip.client_name or "Client",
+                "company": None,
+                "address": invoice.trip.client_address or "Client Address",
+                "city": invoice.trip.client_city or "City",
+                "postal_code": invoice.trip.client_postal_code or "0000",
+                "country": invoice.trip.client_country or "South Africa",
+            },
+            "invoice_number": invoice.invoice_number,
+            "issue_date": invoice.issued_at.strftime("%d %B %Y") if invoice.issued_at else "N/A",
+            "due_date": invoice.due_date.strftime("%d %B %Y") if invoice.due_date else "N/A",
+            "trip_reference": invoice.trip.reference,
+            "currency": invoice.currency,
+            "origin": invoice.trip.origin,
+            "destination": invoice.trip.destination,
+            "status": invoice.status,
+            "items": [
+                {
+                    "description": f"Freight - {invoice.trip.reference}",
+                    "quantity": 1,
+                    "unit_price": float(invoice.total_amount),
+                    "amount": float(invoice.total_amount),
+                }
+            ],
+            "subtotal": float(invoice.total_amount),
+            "tax_amount": 0,
+            "tax_pct": 0,
+            "total": float(invoice.total_amount),
+            "upfront_amount": float(invoice.total_amount) * (float(invoice.upfront_pct) / 100),
+            "balance_amount": float(invoice.total_amount) * (float(invoice.balance_pct) / 100),
+            "notes": invoice.notes or "",
+            "invoice_footer": branding.get("invoice_footer"),
+        }
+
+        pdf_bytes = await pdf_generator.generate_invoice(data)
 
         return Response(
             content=pdf_bytes,

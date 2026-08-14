@@ -38,6 +38,10 @@ class Trip(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     client_name: Mapped[str | None] = mapped_column(String, nullable=True)
     client_email: Mapped[str | None] = mapped_column(String, nullable=True)
     client_phone: Mapped[str | None] = mapped_column(String, nullable=True)
+    client_address: Mapped[str | None] = mapped_column(String, nullable=True)
+    client_city: Mapped[str | None] = mapped_column(String, nullable=True)
+    client_postal_code: Mapped[str | None] = mapped_column(String, nullable=True)
+    client_country: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Cargo
     cargo_desc: Mapped[str | None] = mapped_column(Text, nullable=True)

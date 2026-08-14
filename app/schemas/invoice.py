@@ -18,6 +18,7 @@ class InvoiceResponse(BaseModel):
     balance_amount: Decimal | None = None
     current_milestone: str
     issued_at: datetime | None = None
+    due_date: datetime | None = None
     upfront_paid_at: datetime | None = None
     balance_paid_at: datetime | None = None
     created_at: datetime

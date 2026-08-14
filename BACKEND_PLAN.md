@@ -151,102 +151,208 @@ RUN apt-get update && apt-get install -y \
 
 **File: `app/services/pdf_generator.py`**
 
+The PDF generator supports **13 document types** across 3 categories with tenant branding:
+
 ```python
-import asyncio
-from pathlib import Path
-from jinja2 import Environment, FileSystemLoader
-from weasyprint import HTML
-
-TEMPLATE_DIR = Path(__file__).parent.parent / "templates"
-
 class PDFGenerator:
-    def __init__(self):
-        self.env = Environment(
-            loader=FileSystemLoader(str(TEMPLATE_DIR))
-        )
-
-    async def generate_invoice(self, data: dict) -> bytes:
-        template = self.env.get_template("invoice.html")
-        html = template.render(**data)
-        return await asyncio.to_thread(
-            lambda: HTML(string=html, base_url=str(TEMPLATE_DIR)).write_pdf()
-        )
-
-    async def generate_quotation(self, data: dict) -> bytes:
-        template = self.env.get_template("quotation.html")
-        html = template.render(**data)
-        return await asyncio.to_thread(
-            lambda: HTML(string=html, base_url=str(TEMPLATE_DIR)).write_pdf()
-        )
-
-    async def generate_contract(self, data: dict) -> bytes:
-        template = self.env.get_template("contract.html")
-        html = template.render(**data)
-        return await asyncio.to_thread(
-            lambda: HTML(string=html, base_url=str(TEMPLATE_DIR)).write_pdf()
-        )
-
-    async def generate_waybill(self, data: dict) -> bytes:
-        template = self.env.get_template("waybill.html")
-        html = template.render(**data)
-        return await asyncio.to_thread(
-            lambda: HTML(string=html, base_url=str(TEMPLATE_DIR)).write_pdf()
-        )
-
-pdf_generator = PDFGenerator()
+    """Generate PDF documents from Jinja2 HTML templates using WeasyPrint."""
+    
+    # Client Documents (Shippers)
+    async def generate_invoice(self, data: dict) -> bytes: ...
+    async def generate_quotation(self, data: dict) -> bytes: ...
+    async def generate_proforma_invoice(self, data: dict) -> bytes: ...
+    async def generate_booking_confirmation(self, data: dict) -> bytes: ...
+    async def generate_credit_note(self, data: dict) -> bytes: ...
+    async def generate_debit_note(self, data: dict) -> bytes: ...
+    
+    # Carrier Documents (Transporters)
+    async def generate_load_confirmation(self, data: dict) -> bytes: ...
+    async def generate_carrier_invoice(self, data: dict) -> bytes: ...
+    async def generate_contract(self, data: dict) -> bytes: ...
+    
+    # Operational Documents (Both Parties)
+    async def generate_waybill(self, data: dict) -> bytes: ...
+    async def generate_proof_of_delivery(self, data: dict) -> bytes: ...
+    async def generate_packing_list(self, data: dict) -> bytes: ...
+    async def generate_goods_received_note(self, data: dict) -> bytes: ...
 ```
 
-### Step 3: HTML/CSS Templates
+**Features:**
+- Logo embedding via base64 data URIs
+- Custom Jinja2 filters: `currency`, `address_block`, `base64_logo`
+- Async support via `asyncio.to_thread`
+- Tenant branding from `tenant.settings.branding`
 
-**Reference Projects for Templates:**
-- [federicodeponte/openword](https://github.com/federicodeponte/openword) — Pre-built invoice, contract, quotation HTML templates
-- [markovskiL/pdf-generation](https://github.com/markovskiL/pdf-generation) — WeasyPrint template examples
-- [rehborn/invoice-api](https://github.com/rehborn/invoice-api) — FastAPI + WeasyPrint invoice template
+### Step 3: Document Registry
 
-**Template structure (`app/templates/`):**
+**File: `app/core/document_registry.py`**
 
-```html
-<!-- base.html -->
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <link rel="stylesheet" href="css/document.css">
-</head>
-<body>
-    <header>
-        <div class="company-logo">{{ company.name }}</div>
-        <div class="document-title">{{ document_type }}</div>
-    </header>
+Central registry for all document types with branding configuration:
 
-    <section class="parties">
-        <div class="from">{{ company | address_block }}</div>
-        <div class="to">{{ client | address_block }}</div>
-    </section>
+```python
+class DocumentCategory(str, Enum):
+    CLIENT = "client"      # Documents exchanged with clients
+    CARRIER = "carrier"    # Documents exchanged with transporters
+    OPERATIONAL = "operational"  # Operational & legal documents
 
-    <section class="details">
-        <table class="line-items">
-            <thead>
-                <tr>
-                    <th>Description</th>
-                    <th>Qty</th>
-                    <th>Unit Price</th>
-                    <th>Amount</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in items %}
-                <tr>
-                    <td>{{ item.description }}</td>
-                    <td>{{ item.quantity }}</td>
-                    <td>{{ item.unit_price | currency }}</td>
-                    <td>{{ item.amount | currency }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-            <tfoot>
-                <tr class="total">
-                    <td colspan="3">Total ({{ currency }})</td>
+@dataclass
+class DocumentType:
+    key: str
+    label: str
+    description: str
+    category: DocumentCategory
+    template_name: str
+    pdf_method: str
+    requires_branding: bool = True
+    requires_carrier_branding: bool = False
+    footer_key: str | None = None
+```
+
+**Helper Functions:**
+- `get_document_type(key)` — Get document type by key
+- `get_documents_by_category(category)` — Get all documents for a category
+- `get_client_documents()` — Get all client-facing documents
+- `get_carrier_documents()` — Get all carrier-facing documents
+- `get_operational_documents()` — Get all operational documents
+
+### Step 4: Tenant Branding API
+
+**File: `app/api/v1/tenant.py`**
+
+```python
+# Branding endpoints
+GET    /api/v1/tenant/branding              # Get all branding settings
+PUT    /api/v1/tenant/branding              # Update branding settings
+POST   /api/v1/tenant/branding/logo         # Upload company logo
+DELETE /api/v1/tenant/branding/logo         # Remove company logo
+GET    /api/v1/tenant/branding/document-types  # Get all document types
+
+# Branding data structure
+{
+    "name": "Company Name",
+    "address": "123 Main St",
+    "city": "Johannesburg",
+    "postal_code": "2000",
+    "country": "South Africa",
+    "phone": "+27 11 123 4567",
+    "email": "info@company.co.za",
+    "website": "www.company.co.za",
+    "registration_number": "2024/123456/07",
+    "tax_number": "1234567890",
+    "logo_storage_key": "tenant_id/company_logo/logo.png",
+    "primary_color": "#2c5aa0",
+    "secondary_color": "#1a5276",
+    "footer_text": "Global footer for all documents",
+    "invoice_footer": "Custom invoice footer",
+    "quotation_footer": "Custom quotation footer",
+    # ... 11 more document-specific footers
+}
+```
+
+### Step 5: Document Registry
+
+**File: `app/core/document_registry.py`**
+
+Central registry for all 13 document types with branding configuration:
+
+```python
+class DocumentCategory(str, Enum):
+    CLIENT = "client"      # Documents exchanged with clients
+    CARRIER = "carrier"    # Documents exchanged with transporters
+    OPERATIONAL = "operational"  # Operational & legal documents
+
+@dataclass
+class DocumentType:
+    key: str
+    label: str
+    description: str
+    category: DocumentCategory
+    template_name: str
+    pdf_method: str
+    requires_branding: bool = True
+    requires_carrier_branding: bool = False
+    footer_key: str | None = None
+
+# 13 Document Types
+DOCUMENT_TYPES = {
+    # Client Documents (6)
+    "quotation": DocumentType(...),
+    "proforma_invoice": DocumentType(...),
+    "booking_confirmation": DocumentType(...),
+    "invoice": DocumentType(...),
+    "credit_note": DocumentType(...),
+    "debit_note": DocumentType(...),
+    
+    # Carrier Documents (3)
+    "load_confirmation": DocumentType(...),
+    "carrier_invoice": DocumentType(...),
+    "contract": DocumentType(...),
+    
+    # Operational Documents (4)
+    "waybill": DocumentType(...),
+    "proof_of_delivery": DocumentType(...),
+    "packing_list": DocumentType(...),
+    "goods_received_note": DocumentType(...),
+}
+```
+
+### Step 6: HTML/CSS Templates
+
+**Complete Template Set (`app/templates/`):**
+
+| Category | Template | Description |
+|----------|----------|-------------|
+| **Base** | `base.html` | Base layout with CSS variables for branding |
+| **CSS** | `css/document.css` | Shared styles with Paged Media support |
+| **Client** | `invoice.html` | Commercial Invoice |
+| | `quotation.html` | Quotation (Rate Sheet) |
+| | `proforma_invoice.html` | Proforma Invoice |
+| | `booking_confirmation.html` | Booking Confirmation |
+| | `credit_debit_note.html` | Credit/Debit Notes |
+| **Carrier** | `load_confirmation.html` | Load Confirmation |
+| | `carrier_invoice.html` | Carrier Invoice |
+| | `contract.html` | Transport Contract |
+| **Operational** | `waybill.html` | Waybill / Bill of Lading |
+| | `proof_of_delivery.html` | Proof of Delivery (POD) |
+| | `packing_list.html` | Packing List |
+| | `goods_received_note.html` | Goods Received Note (GRN) |
+
+**Branding Support:**
+- Logo display in header (if uploaded)
+- Primary color applied to headers, table headers, borders
+- Custom footer per document type
+- Company details from tenant settings
+
+### Step 7: PDF Generation Integration
+
+**File: `app/api/v1/invoices.py` (and other document APIs)**
+
+```python
+# Load tenant branding
+tenant_settings = tenant.settings or {}
+branding = tenant_settings.get("branding", {})
+
+# Get logo base64 if available
+logo_base64 = ""
+if branding.get("logo_storage_key"):
+    logo_base64 = pdf_generator._get_base64_logo(branding["logo_storage_key"])
+
+# Build data with branding
+data = {
+    "primary_color": branding.get("primary_color", "#2c5aa0"),
+    "logo_base64": logo_base64,
+    "company": {
+        "name": tenant.name,
+        "address": tenant_settings.get("address"),
+        # ... other fields
+    },
+    "invoice_footer": branding.get("invoice_footer"),
+    # ... other template data
+}
+
+# Generate PDF
+pdf_bytes = await pdf_generator.generate_invoice(data)
+```
                     <td>{{ total | currency }}</td>
                 </tr>
             </tfoot>

@@ -34,6 +34,7 @@ class Invoice(Base, UUIDPrimaryKeyMixin, TimestampMixin):
 
     # Dates
     issued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     upfront_paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     balance_paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
