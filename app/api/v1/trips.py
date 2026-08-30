@@ -6,11 +6,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.deps import get_db, get_current_user, get_current_tenant
-from app.models.user import User
+from app.deps import get_current_tenant, get_current_user, get_db
 from app.models.tenant import Tenant
-from app.schemas.trip import TripCreate, TripResponse, TripAssign
+from app.models.user import User
 from app.schemas.common import PaginatedResponse
+from app.schemas.trip import TripAssign, TripCreate, TripResponse
 from app.services.trip import TripService
 
 router = APIRouter()

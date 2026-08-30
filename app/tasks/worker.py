@@ -1,8 +1,8 @@
 """
 Taskiq background tasks — notifications, driver pack expiry, sync processing.
 """
-from taskiq import TaskiqMessage, TaskiqResult, TaskiqMiddleware
-from taskiq_redis import RedisStreamBroker, RedisAsyncResultBackend
+from taskiq import TaskiqMessage, TaskiqMiddleware, TaskiqResult
+from taskiq_redis import RedisAsyncResultBackend, RedisStreamBroker
 
 from app.config import get_settings
 
@@ -56,7 +56,8 @@ async def dispatch_notification(
 @broker.task
 async def revalidate_drivers_packs() -> int:
     """Check and expire old driver's packs."""
-    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
     from app.services.drivers_pack import DriversPackService
 
     engine = create_async_engine(settings.DATABASE_URL)
@@ -73,7 +74,9 @@ async def revalidate_drivers_packs() -> int:
 async def process_sync_events(tenant_id: str) -> int:
     """Process pending sync events for a tenant."""
     from uuid import UUID
-    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
     from app.services.sync import SyncService
 
     engine = create_async_engine(settings.DATABASE_URL)

@@ -1,16 +1,16 @@
 """
 Document service — file upload, storage, retrieval, verification.
 """
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
+from app.core.exceptions import DeliveryFlowError
 from app.models.document import Document, TripDocumentRequirement
 from app.storage.seaweed import SeaweedStorage
-from app.core.exceptions import DeliveryFlowError
-from app.config import get_settings
 
 settings = get_settings()
 
@@ -41,7 +41,7 @@ class DocumentService:
         uploaded_by: UUID | None = None,
     ) -> Document:
         """Upload document to storage and create DB record."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         storage = _get_storage()
 
         # Generate unique storage key
@@ -104,7 +104,7 @@ class DocumentService:
         doc = await self._get_doc(doc_id, tenant_id)
         doc.verified = verified
         doc.verified_by = verified_by
-        doc.verified_at = datetime.now(timezone.utc)
+        doc.verified_at = datetime.now(UTC)
         doc.verification_notes = notes
         await self.db.flush()
         return doc
@@ -149,4 +149,4 @@ class DocumentService:
         if req:
             req.uploaded = True
             req.document_id = document_id
-            req.updated_at = datetime.now(timezone.utc)
+            req.updated_at = datetime.now(UTC)

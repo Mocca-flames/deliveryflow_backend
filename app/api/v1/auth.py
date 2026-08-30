@@ -5,29 +5,29 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.deps import get_db, get_current_user, get_email_router
-from app.schemas.auth import (
-    LoginRequest,
-    TokenResponse,
-    RefreshRequest,
-    RegisterRequest,
-    VerifyOtpRequest,
-    ResendOtpRequest,
-    ForgotPasswordRequest,
-    ResetPasswordRequest,
-    MessageResponse,
-)
-from app.services.auth import authenticate_user, refresh_tokens, AuthenticationError
-from app.services.otp import (
-    OtpError,
-    verify_otp,
-    clear_otp,
-    send_verification_otp,
-    send_password_reset_otp,
-)
 from app.core.security import hash_password
+from app.deps import get_current_user, get_db, get_email_router
 from app.models.user import User
 from app.notifications.email.router import EmailRouter
+from app.schemas.auth import (
+    ForgotPasswordRequest,
+    LoginRequest,
+    MessageResponse,
+    RefreshRequest,
+    RegisterRequest,
+    ResendOtpRequest,
+    ResetPasswordRequest,
+    TokenResponse,
+    VerifyOtpRequest,
+)
+from app.services.auth import AuthenticationError, authenticate_user, refresh_tokens
+from app.services.otp import (
+    OtpError,
+    clear_otp,
+    send_password_reset_otp,
+    send_verification_otp,
+    verify_otp,
+)
 
 router = APIRouter()
 

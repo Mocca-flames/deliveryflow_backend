@@ -10,7 +10,7 @@ import asyncio
 import os
 import sys
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -29,7 +29,7 @@ from app.core.exceptions import (
     TokenNotFoundError,
 )
 from app.core.security import hash_password, verify_password
-from app.core.token import generate_tracking_token, generate_carrier_token
+from app.core.token import generate_carrier_token, generate_tracking_token
 from app.schemas.auth import LoginRequest, RefreshRequest, TokenResponse
 from app.services.auth import (
     AuthenticationError,
@@ -185,13 +185,13 @@ def test_jwt():
     def _access_expiry():
         tok = create_access_token(uuid.uuid4(), uuid.uuid4())
         p = jwt.decode(tok, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
-        delta = datetime.fromtimestamp(p["exp"], tz=timezone.utc) - datetime.fromtimestamp(p["iat"], tz=timezone.utc)
+        delta = datetime.fromtimestamp(p["exp"], tz=UTC) - datetime.fromtimestamp(p["iat"], tz=UTC)
         assert delta == timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
 
     def _refresh_expiry():
         tok = create_refresh_token(uuid.uuid4())
         p = jwt.decode(tok, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
-        delta = datetime.fromtimestamp(p["exp"], tz=timezone.utc) - datetime.fromtimestamp(p["iat"], tz=timezone.utc)
+        delta = datetime.fromtimestamp(p["exp"], tz=UTC) - datetime.fromtimestamp(p["iat"], tz=UTC)
         assert delta == timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRES_DAYS)
 
     run("access token decodable", _decode_access)
@@ -388,9 +388,10 @@ async def test_auth_service():
 
 async def test_trip_service():
     print("\n[Trip Service]")
-    from app.services.trip import TripService
-    from app.schemas.trip import TripCreate
     from datetime import date
+
+    from app.schemas.trip import TripCreate
+    from app.services.trip import TripService
 
     async def _create():
         db = _mock_db()
@@ -534,6 +535,7 @@ async def test_api_routes():
     print("\n[API Routes]")
     try:
         from httpx import ASGITransport, AsyncClient
+
         from app.main import app
     except (ImportError, ModuleNotFoundError) as e:
         print(f"  SKIP  (missing dependency: {e})")

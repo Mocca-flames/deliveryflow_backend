@@ -2,10 +2,25 @@ import asyncio
 import base64
 from pathlib import Path
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 from weasyprint import HTML
 
 TEMPLATE_DIR = Path(__file__).parent.parent / "templates"
+
+# Currency symbols for SADC region
+CURRENCY_SYMBOLS = {
+    "ZAR": "R",
+    "BWP": "P",
+    "NAD": "N$",
+    "MZN": "MT",
+    "ZMW": "ZK",
+    "ZWL": "Z$",
+    "MWK": "MK",
+    "CDF": "FC",
+    "USD": "$",
+    "EUR": "\u20ac",
+    "GBP": "\u00a3",
+}
 
 
 class PDFGenerator:
@@ -14,15 +29,28 @@ class PDFGenerator:
     def __init__(self) -> None:
         self.env = Environment(
             loader=FileSystemLoader(str(TEMPLATE_DIR)),
-            autoescape=True,
+            autoescape=select_autoescape(["html"]),
         )
         self.env.filters["currency"] = self._format_currency
+        self.env.filters["sadc_currency"] = self._format_sadc_currency
         self.env.filters["address_block"] = self._format_address_block
         self.env.filters["base64_logo"] = self._get_base64_logo
+        self.env.filters["safe_html"] = self._safe_html
+        self.env.filters["percent"] = self._format_percent
+        self.env.filters["default_if_none"] = self._default_if_none
 
     @staticmethod
     def _format_currency(value: float, currency: str = "ZAR") -> str:
         return f"{currency} {value:,.2f}"
+
+    @staticmethod
+    def _format_sadc_currency(value: float, currency: str = "ZAR") -> str:
+        """Format currency using SADC conventions (e.g. 'R 1,234.56' for ZAR)."""
+        if value is None:
+            return "\u2014"
+        symbol = CURRENCY_SYMBOLS.get(currency, currency)
+        formatted = f"{value:,.2f}"
+        return f"{symbol} {formatted}"
 
     @staticmethod
     def _format_address_block(addr: dict) -> str:
@@ -36,17 +64,35 @@ class PDFGenerator:
         return "<br>".join(line for line in lines if line)
 
     @staticmethod
-    def _get_base64_logo(logo_storage_key: str | None) -> str:
-        """Convert logo storage key to base64 data URI for HTML embedding."""
+    def _safe_html(text: str) -> str:
+        """Mark string as safe HTML (bypass autoescape)."""
+        from markupsafe import Markup
+        return Markup(text)
+
+    @staticmethod
+    def _format_percent(value) -> str:
+        """Format percentage, showing '0.00%' when zero."""
+        if value is None:
+            return "\u2014"
+        return f"{float(value):.2f}%"
+
+    @staticmethod
+    def _default_if_none(value, default=""):
+        """Return default if value is None."""
+        return default if value is None else value
+
+    @staticmethod
+    async def _get_base64_logo(logo_storage_key: str | None) -> str:
+        """Convert logo storage key to base64 data URI for HTML embedding.
+        Async-safe: must be called before template rendering, not from within a filter.
+        """
         if not logo_storage_key:
             return ""
-        
+
         try:
             from app.storage.seaweed import SeaweedStorage
             storage = SeaweedStorage()
-            logo_bytes = asyncio.get_event_loop().run_until_complete(
-                storage.get(logo_storage_key)
-            )
+            logo_bytes = await storage.get(logo_storage_key)
             # Determine MIME type from key
             if logo_storage_key.endswith(".png"):
                 mime_type = "image/png"
@@ -56,7 +102,41 @@ class PDFGenerator:
                 mime_type = "image/svg+xml"
             else:
                 mime_type = "image/png"
-            
+
+            base64_data = base64.b64encode(logo_bytes).decode("utf-8")
+            return f"data:{mime_type};base64,{base64_data}"
+        except Exception:
+            return ""
+
+    @staticmethod
+    def _get_base64_logo_sync(logo_storage_key: str | None) -> str:
+        """Synchronous fallback for logo loading (used in Jinja2 filters)."""
+        if not logo_storage_key:
+            return ""
+
+        try:
+            from app.storage.seaweed import SeaweedStorage
+            storage = SeaweedStorage()
+            # Use a new event loop if none exists
+            try:
+                loop = asyncio.get_running_loop()
+                # We're in an async context but called synchronously
+                # Can't use run_until_complete - return empty
+                return ""
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                logo_bytes = loop.run_until_complete(storage.get(logo_storage_key))
+                loop.close()
+
+            if logo_storage_key.endswith(".png"):
+                mime_type = "image/png"
+            elif logo_storage_key.endswith((".jpg", ".jpeg")):
+                mime_type = "image/jpeg"
+            elif logo_storage_key.endswith(".svg"):
+                mime_type = "image/svg+xml"
+            else:
+                mime_type = "image/png"
+
             base64_data = base64.b64encode(logo_bytes).decode("utf-8")
             return f"data:{mime_type};base64,{base64_data}"
         except Exception:
@@ -68,6 +148,15 @@ class PDFGenerator:
         return await asyncio.to_thread(
             lambda: HTML(string=html_string, base_url=str(TEMPLATE_DIR)).write_pdf()
         )
+
+    async def generate_sadc_document(self, data: dict, template_name: str = "sadc_invoice_classic.html") -> bytes:
+        """Generate a SADC-compliant document PDF from structured data + template config."""
+        # Pre-fetch logos async before template render
+        if data.get("issuer", {}).get("logoUrl") and data["issuer"]["logoUrl"].startswith("s3://"):
+            data["issuer"]["logoUrl"] = await self._get_base64_logo(data["issuer"]["logoUrl"])
+        if data.get("recipient", {}).get("logoUrl") and data["recipient"]["logoUrl"].startswith("s3://"):
+            data["recipient"]["logoUrl"] = await self._get_base64_logo(data["recipient"]["logoUrl"])
+        return await self._render(template_name, data)
 
     # ═══════════════════════════════════════════════════════════════════
     # Client Documents (Shippers)
@@ -134,6 +223,10 @@ class PDFGenerator:
     async def generate_goods_received_note(self, data: dict) -> bytes:
         """Goods Received Note (GRN) - Receiver's confirmation of inventory."""
         return await self._render("goods_received_note.html", data)
+
+    async def generate_delivery_note(self, data: dict) -> bytes:
+        """Delivery Note - Proof of delivery companion for shipment handover."""
+        return await self._render("delivery_note.html", data)
 
 
 pdf_generator = PDFGenerator()

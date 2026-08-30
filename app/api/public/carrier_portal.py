@@ -1,14 +1,12 @@
 """
 Public carrier portal API routes — tokenized access for carriers.
 """
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.deps import get_db
 from app.models.trip import Trip
-from app.models.document import Document
-from app.core.exceptions import TokenNotFoundError
 from app.services.document import DocumentService
 
 router = APIRouter()
@@ -50,6 +48,7 @@ async def carrier_accept(token: str, db: AsyncSession = Depends(get_db)):
 
     trip.status = "assigned"
     await db.flush()
+    await db.commit()
 
     return {"message": "Trip accepted", "trip_id": str(trip.id), "status": trip.status}
 

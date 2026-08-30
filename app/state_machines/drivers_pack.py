@@ -9,13 +9,13 @@ Rules:
 - Any state -> expired: Scheduled Taskiq job
 - Hard gate: Trip cannot reach contract_awarded if pack is pending/expired
 """
-from datetime import datetime, timezone
+import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.drivers_pack import DriversPack
 from app.core.exceptions import InvalidStateTransitionError
-
+from app.models.drivers_pack import DriversPack
 
 VALID_TRANSITIONS = {
     "pending": ["auto_verified", "flagged", "expired"],
@@ -39,17 +39,13 @@ async def transition_drivers_pack(
     db: AsyncSession,
     pack: DriversPack,
     new_status: str,
-    triggered_by: "uuid.UUID | None" = None,
+    triggered_by: uuid.UUID | None = None,
     notes: str | None = None,
 ) -> DriversPack:
     """Transition drivers pack to new status."""
-    from app.core.exceptions import InvalidStateTransitionError
-    import uuid
-
     validate_transition(pack.status, new_status)
 
-    now = datetime.now(timezone.utc)
-    old_status = pack.status
+    now = datetime.now(UTC)
 
     pack.status = new_status
     pack.updated_at = now
@@ -76,13 +72,16 @@ async def transition_drivers_pack(
     return pack
 
 
-async def check_pack_gate(db: AsyncSession, driver_id: "uuid.UUID | None", vehicle_id: "uuid.UUID | None") -> bool:
+async def check_pack_gate(
+    db: AsyncSession,
+    driver_id: uuid.UUID | None,
+    vehicle_id: uuid.UUID | None,
+) -> bool:
     """
     Hard gate: Returns True if driver/vehicle packs are valid for contract award.
     Returns False if any required pack is pending or expired.
     """
-    from sqlalchemy import select, or_
-    import uuid
+    from sqlalchemy import or_, select
 
     if driver_id is None and vehicle_id is None:
         return True

@@ -1,0 +1,322 @@
+{# ═══════════════════════════════════════════════════════════════════════════════
+   SADC Invoice — Classic Letterhead Template
+   
+   Consumes: SadcDocument (data) + TemplateConfig (config)
+   Supports: configurable logo position, party order, VAT column toggle,
+             dual addresses, detail lines, multi-currency, banking block
+   ═══════════════════════════════════════════════════════════════════════════════ #}
+{% extends "base.html" %}
+{% block content %}
+
+{# ── Determine layout from config ─────────────────────────────────────────── #}
+{% set logo_left = (config.logoPosition|default("left") == "left") %}
+{% set issuer_first = (config.partyOrder|default("issuerLeft") == "issuerLeft") %}
+{% set show_vat = config.showVatColumn|default(true) %}
+{% set show_dual = config.showDualAddress|default(true) %}
+{% set theme = config.theme|default({}) %}
+{% set primary = theme.primaryColor|default("#1a3a5c") %}
+{% set has_vat = has_vat_items|default(false) %}
+{% set currency = meta.currency|default("ZAR") %}
+
+<style>
+    :root {
+        --primary-color: {{ primary }};
+        --font-body: {{ theme.fontFamily|default("Georgia, 'Times New Roman', serif") }};
+    }
+    body { font-family: var(--font-body); }
+    .sadc-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.5em; padding-bottom: 1em; border-bottom: 3px solid var(--primary-color); }
+    .sadc-header.reverse { flex-direction: row-reverse; }
+    .sadc-party-block { flex: 1; }
+    .sadc-party-block.right { text-align: right; }
+    .sadc-party-name { font-size: 18pt; font-weight: bold; color: var(--primary-color); margin-bottom: 0.3em; }
+    .sadc-party-detail { font-size: 9pt; color: #555; line-height: 1.5; }
+    .sadc-party-detail .label-sm { font-weight: bold; color: #888; }
+    .sadc-doc-title { font-size: 26pt; font-weight: bold; color: var(--primary-color); text-transform: uppercase; letter-spacing: 2px; }
+    .sadc-doc-title.right { text-align: right; }
+    .sadc-doc-number { font-size: 11pt; color: #666; margin-top: 0.2em; }
+    .sadc-doc-number.right { text-align: right; }
+    .sadc-stamp { display: inline-block; padding: 4px 12px; border: 2px solid; border-radius: 4px; font-weight: bold; font-size: 10pt; margin-top: 0.5em; text-transform: uppercase; }
+    .sadc-stamp.PAID { color: #16a34a; border-color: #16a34a; }
+    .sadc-stamp.OVERDUE { color: #dc2626; border-color: #dc2626; }
+    .sadc-stamp.DRAFT { color: #9ca3af; border-color: #9ca3af; }
+    .sadc-stamp.CANCELLED { color: #6b7280; border-color: #6b7280; text-decoration: line-through; }
+    .sadc-meta { width: 100%; border-collapse: collapse; margin-bottom: 1.5em; }
+    .sadc-meta td { padding: 4px 8px; font-size: 10pt; }
+    .sadc-meta td.lbl { font-weight: bold; color: #666; width: 25%; }
+    .sadc-parties { display: flex; justify-content: space-between; margin-bottom: 2em; }
+    .sadc-parties > div { width: 48%; }
+    .sadc-parties .party-label { font-size: 9pt; font-weight: bold; color: #999; text-transform: uppercase; margin-bottom: 0.5em; }
+    .sadc-parties .party-address { font-size: 10pt; line-height: 1.6; }
+    .sadc-parties .party-address strong { color: #333; }
+    .sadc-items { width: 100%; border-collapse: collapse; margin-bottom: 2em; }
+    .sadc-items th { background-color: var(--primary-color); color: white; padding: 10px 8px; text-align: left; font-size: 9pt; font-weight: bold; }
+    .sadc-items th.right { text-align: right; }
+    .sadc-items td { padding: 8px; border-bottom: 1px solid #ddd; font-size: 10pt; vertical-align: top; }
+    .sadc-items td.right { text-align: right; }
+    .sadc-items tbody tr:nth-child(even) { background-color: #f9f9f9; }
+    .sadc-items .item-code { font-size: 8pt; color: #999; }
+    .sadc-items .detail-lines { font-size: 8pt; color: #666; padding-left: 1em; margin-top: 4px; }
+    .sadc-items .detail-lines div { margin-bottom: 2px; }
+    .sadc-items .detail-lines::before { content: ""; }
+    .sadc-totals-wrap { display: flex; justify-content: space-between; margin-bottom: 2em; gap: 2em; }
+    .sadc-totals { width: 50%; }
+    .sadc-totals table { width: 100%; border-collapse: collapse; }
+    .sadc-totals td { padding: 6px 8px; font-size: 10pt; }
+    .sadc-totals td.lbl { text-align: right; font-weight: bold; color: #666; }
+    .sadc-totals td.amt { text-align: right; font-weight: bold; }
+    .sadc-totals tr.grand td { font-size: 14pt; font-weight: bold; color: var(--primary-color); border-top: 2px solid var(--primary-color); padding-top: 10px; }
+    .sadc-banking { width: 45%; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 1.2em; }
+    .sadc-banking h4 { margin: 0 0 0.8em 0; font-size: 11pt; color: var(--primary-color); border-bottom: 2px solid var(--primary-color); padding-bottom: 0.4em; }
+    .sadc-banking table { width: 100%; border-collapse: collapse; }
+    .sadc-banking td { padding: 3px 0; font-size: 9pt; }
+    .sadc-banking td.lbl { font-weight: bold; color: #666; width: 40%; }
+    .sadc-notes { margin-bottom: 2em; padding: 1em; background: #f9f9f9; border-left: 3px solid var(--primary-color); }
+    .sadc-notes .lbl { font-weight: bold; font-size: 10pt; color: #666; margin-bottom: 0.5em; }
+    .sadc-notes .content { font-size: 10pt; }
+    .sadc-footer { margin-top: 3em; padding-top: 1em; border-top: 1px solid #ddd; font-size: 8pt; color: #999; text-align: center; }
+    .sadc-address-dual { margin-bottom: 0.3em; }
+    .sadc-address-dual .addr-label { font-size: 8pt; color: #999; text-transform: uppercase; margin-bottom: 2px; }
+</style>
+
+{# ── Header: Logo + Company + Document Title ──────────────────────────────── #}
+<div class="sadc-header {% if not logo_left %}reverse{% endif %}">
+    {# Left side: company info (or logo if logo_left) #}
+    <div class="sadc-party-block {% if not logo_left %}right{% endif %}">
+        {% if issuer.logoUrl %}
+        <div style="margin-bottom: 0.5em;">
+            <img src="{{ issuer.logoUrl }}" alt="{{ issuer.legalName }}" style="max-height: 60px; max-width: 200px;">
+        </div>
+        {% endif %}
+        <div class="sadc-party-name">{{ issuer.legalName }}</div>
+        <div class="sadc-party-detail">
+            {% if show_dual and issuer.postalAddress %}
+            <div class="sadc-address-dual">
+                <div class="addr-label">Postal</div>
+                {{ issuer.postalAddress }}
+            </div>
+            {% endif %}
+            {% if issuer.physicalAddress %}
+            <div class="sadc-address-dual">
+                {% if show_dual %}<div class="addr-label">Physical</div>{% endif %}
+                {{ issuer.physicalAddress }}{% if issuer.city %}, {{ issuer.city }}{% endif %}{% if issuer.province %}, {{ issuer.province }}{% endif %} {% if issuer.postalCode %}{{ issuer.postalCode }}{% endif %}
+            </div>
+            {% elif issuer.city %}
+            {{ issuer.city }}{% if issuer.province %}, {{ issuer.province }}{% endif %} {% if issuer.postalCode %}{{ issuer.postalCode }}{% endif %}
+            {% endif %}
+            {% if issuer.country %}{{ issuer.country }}{% endif %}
+            {% if issuer.vatNumber %}<br><span class="label-sm">VAT No:</span> {{ issuer.vatNumber }}{% endif %}
+            {% if issuer.companyRegistrationNumber %}<br><span class="label-sm">Reg No:</span> {{ issuer.companyRegistrationNumber }}{% endif %}
+            {% if issuer.contact.tel %}<br>Tel: {{ issuer.contact.tel }}{% endif %}
+            {% if issuer.contact.fax %}<br>Fax: {{ issuer.contact.fax }}{% endif %}
+            {% if issuer.contact.cell %}<br>Cell: {{ issuer.contact.cell }}{% endif %}
+            {% if issuer.contact.email %}<br>Email: {{ issuer.contact.email }}{% endif %}
+        </div>
+    </div>
+
+    {# Right side: document title + number #}
+    <div class="sadc-party-block">
+        <div class="sadc-doc-title {% if logo_left %}right{% endif %}">{{ meta.documentType }}</div>
+        <div class="sadc-doc-number {% if logo_left %}right{% endif %}">{{ meta.documentNumber }}</div>
+        {% if meta.statusStamp %}
+        <div style="{% if logo_left %}text-align: right;{% endif %}">
+            <span class="sadc-stamp {{ meta.statusStamp }}">{{ meta.statusStamp }}</span>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{# ── Parties Section ──────────────────────────────────────────────────────── #}
+<div class="sadc-parties">
+    {% if issuer_first %}
+    {# Left: Issuer (Supplier) — Right: Recipient (Client) #}
+    <div>
+        <div class="party-label">FROM</div>
+        <div class="party-address">
+            <strong>{{ issuer.legalName }}</strong><br>
+            {{ issuer.physicalAddress or issuer.postalAddress or "" }}{% if issuer.city %}<br>{{ issuer.city }}{% endif %}{% if issuer.province %}, {{ issuer.province }}{% endif %} {% if issuer.postalCode %}{{ issuer.postalCode }}{% endif %}
+            {% if issuer.country %}<br>{{ issuer.country }}{% endif %}
+            {% if issuer.vatNumber %}<br><strong>VAT No:</strong> {{ issuer.vatNumber }}{% endif %}
+            {% if issuer.companyRegistrationNumber %}<br><strong>Reg No:</strong> {{ issuer.companyRegistrationNumber }}{% endif %}
+        </div>
+    </div>
+    <div>
+        <div class="party-label">TO</div>
+        <div class="party-address">
+            <strong>{{ recipient.legalName }}</strong><br>
+            {{ recipient.physicalAddress or recipient.postalAddress or "" }}{% if recipient.city %}<br>{{ recipient.city }}{% endif %}{% if recipient.province %}, {{ recipient.province }}{% endif %} {% if recipient.postalCode %}{{ recipient.postalCode }}{% endif %}
+            {% if recipient.country %}<br>{{ recipient.country }}{% endif %}
+            {% if recipient.vatNumber %}<br><strong>VAT No:</strong> {{ recipient.vatNumber }}{% endif %}
+            {% if recipient.companyRegistrationNumber %}<br><strong>Reg No:</strong> {{ recipient.companyRegistrationNumber }}{% endif %}
+            {% if recipient.contactPersonName %}<br><strong>Contact:</strong> {{ recipient.contactPersonName }}{% endif %}
+        </div>
+    </div>
+    {% else %}
+    {# Left: Recipient (Client) — Right: Issuer (Supplier) #}
+    <div>
+        <div class="party-label">TO</div>
+        <div class="party-address">
+            <strong>{{ recipient.legalName }}</strong><br>
+            {{ recipient.physicalAddress or recipient.postalAddress or "" }}{% if recipient.city %}<br>{{ recipient.city }}{% endif %}{% if recipient.province %}, {{ recipient.province }}{% endif %} {% if recipient.postalCode %}{{ recipient.postalCode }}{% endif %}
+            {% if recipient.country %}<br>{{ recipient.country }}{% endif %}
+            {% if recipient.vatNumber %}<br><strong>VAT No:</strong> {{ recipient.vatNumber }}{% endif %}
+            {% if recipient.companyRegistrationNumber %}<br><strong>Reg No:</strong> {{ recipient.companyRegistrationNumber }}{% endif %}
+            {% if recipient.contactPersonName %}<br><strong>Contact:</strong> {{ recipient.contactPersonName }}{% endif %}
+        </div>
+    </div>
+    <div>
+        <div class="party-label">FROM</div>
+        <div class="party-address">
+            <strong>{{ issuer.legalName }}</strong><br>
+            {{ issuer.physicalAddress or issuer.postalAddress or "" }}{% if issuer.city %}<br>{{ issuer.city }}{% endif %}{% if issuer.province %}, {{ issuer.province }}{% endif %} {% if issuer.postalCode %}{{ issuer.postalCode }}{% endif %}
+            {% if issuer.country %}<br>{{ issuer.country }}{% endif %}
+            {% if issuer.vatNumber %}<br><strong>VAT No:</strong> {{ issuer.vatNumber }}{% endif %}
+            {% if issuer.companyRegistrationNumber %}<br><strong>Reg No:</strong> {{ issuer.companyRegistrationNumber }}{% endif %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{# ── Meta Table ───────────────────────────────────────────────────────────── #}
+<table class="sadc-meta">
+    <tr>
+        <td class="lbl">{{ meta.documentType }} Date:</td>
+        <td>{{ meta.date }}</td>
+        {% if meta.dueDate %}
+        <td class="lbl">Due Date:</td>
+        <td>{{ meta.dueDate }}</td>
+        {% endif %}
+    </tr>
+    {% if meta.reference %}
+    <tr>
+        <td class="lbl">Reference:</td>
+        <td>{{ meta.reference }}</td>
+        {% if meta.salesRep %}
+        <td class="lbl">Sales Rep:</td>
+        <td>{{ meta.salesRep }}</td>
+        {% endif %}
+    </tr>
+    {% endif %}
+    {% if meta.pageInfo %}
+    <tr>
+        <td class="lbl">Page:</td>
+        <td>{{ meta.pageInfo }}</td>
+    </tr>
+    {% endif %}
+</table>
+
+{# ── Line Items Table ─────────────────────────────────────────────────────── #}
+<table class="sadc-items">
+    <thead>
+        <tr>
+            <th style="width: 5%">#</th>
+            <th style="width: {% if show_vat and has_vat %}40%{% else %}50%{% endif %}">Description</th>
+            <th class="right" style="width: 8%">Qty</th>
+            {% if show_vat and has_vat %}
+            <th class="right" style="width: 8%">VAT %</th>
+            {% endif %}
+            <th class="right" style="width: 12%">Unit Price</th>
+            <th class="right" style="width: 8%">Currency</th>
+            <th class="right" style="width: 12%">Amount</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in lineItems %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>
+                {% if item.itemCode %}<span class="item-code">{{ item.itemCode }}</span><br>{% endif %}
+                <strong>{{ item.description }}</strong>
+                {% if item.detailLines and item.detailLines|length > 0 %}
+                <div class="detail-lines">
+                    {% for dl in item.detailLines %}
+                    <div>{{ dl }}</div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </td>
+            <td class="right">{{ item.quantity }}</td>
+            {% if show_vat and has_vat %}
+            <td class="right">{{ item.vatPercent|default_if_none("N/A")|percent if item.vatPercent is not none else "N/A" }}</td>
+            {% endif %}
+            <td class="right">{{ item.unitPrice|sadc_currency(item.currency|default(currency)) }}</td>
+            <td class="right">{{ item.currency|default(currency) }}</td>
+            <td class="right">{{ item.exclTotal|sadc_currency(item.currency|default(currency)) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{# ── Totals + Banking (side by side) ──────────────────────────────────────── #}
+<div class="sadc-totals-wrap">
+    {# Totals Block #}
+    <div class="sadc-totals">
+        <table>
+            <tr>
+                <td class="lbl">Subtotal (excl):</td>
+                <td class="amt">{{ totals.subTotalExcl|sadc_currency(totals.currency) }}</td>
+            </tr>
+            {% if totals.totalDiscount and totals.totalDiscount > 0 %}
+            <tr>
+                <td class="lbl">Discount:</td>
+                <td class="amt">- {{ totals.totalDiscount|sadc_currency(totals.currency) }}</td>
+            </tr>
+            {% endif %}
+            {% if totals.totalVat is defined and totals.totalVat is not none and has_vat %}
+            <tr>
+                <td class="lbl">VAT:</td>
+                <td class="amt">{{ totals.totalVat|sadc_currency(totals.currency) }}</td>
+            </tr>
+            {% endif %}
+            <tr class="grand">
+                <td class="lbl">Total:</td>
+                <td class="amt">{{ totals.grandTotal|sadc_currency(totals.currency) }}</td>
+            </tr>
+            {% if totals.amountPaid is defined and totals.amountPaid is not none and totals.amountPaid > 0 %}
+            <tr>
+                <td class="lbl">Amount Paid:</td>
+                <td class="amt">{{ totals.amountPaid|sadc_currency(totals.currency) }}</td>
+            </tr>
+            {% endif %}
+            <tr>
+                <td class="lbl"><strong>Balance Due:</strong></td>
+                <td class="amt"><strong>{{ totals.balanceDue|sadc_currency(totals.currency) }}</strong></td>
+            </tr>
+        </table>
+    </div>
+
+    {# Banking Block (prominent, not footer decoration) #}
+    {% if banking and banking.bankName %}
+    <div class="sadc-banking">
+        <h4>Payment Details</h4>
+        <table>
+            <tr><td class="lbl">Bank:</td><td>{{ banking.bankName }}</td></tr>
+            <tr><td class="lbl">Account Holder:</td><td>{{ banking.accountHolder }}</td></tr>
+            <tr><td class="lbl">Account Number:</td><td>{{ banking.accountNumber }}</td></tr>
+            {% if banking.accountType %}<tr><td class="lbl">Account Type:</td><td>{{ banking.accountType }}</td></tr>{% endif %}
+            {% if banking.branchName %}<tr><td class="lbl">Branch:</td><td>{{ banking.branchName }}</td></tr>{% endif %}
+            {% if banking.branchCode %}<tr><td class="lbl">Branch Code:</td><td>{{ banking.branchCode }}</td></tr>{% endif %}
+            {% if banking.swiftCode %}<tr><td class="lbl">SWIFT:</td><td>{{ banking.swiftCode }}</td></tr>{% endif %}
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+{# ── Notes / Terms ────────────────────────────────────────────────────────── #}
+{% if footer and footer.termsNotes %}
+<div class="sadc-notes">
+    <div class="lbl">Terms & Conditions</div>
+    <div class="content">{{ footer.termsNotes }}</div>
+</div>
+{% endif %}
+
+{# ── Footer ───────────────────────────────────────────────────────────────── #}
+<div class="sadc-footer">
+    {% if footer and footer.thankYouMessage %}
+    {{ footer.thankYouMessage }}<br>
+    {% endif %}
+    {{ issuer.legalName }}
+    {% if issuer.companyRegistrationNumber %} — Reg No: {{ issuer.companyRegistrationNumber }}{% endif %}
+    {% if issuer.vatNumber %} — VAT No: {{ issuer.vatNumber }}{% endif %}
+</div>
+
+{% endblock %}

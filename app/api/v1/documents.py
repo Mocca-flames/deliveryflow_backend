@@ -1,16 +1,17 @@
 """
-Documents API routes — upload, download, verification.
+Documents API routes — upload, download, verification, PDF generation.
 """
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.deps import get_db, get_current_user, get_current_tenant
-from app.models.user import User
+from app.deps import get_current_tenant, get_current_user, get_db
 from app.models.tenant import Tenant
+from app.models.user import User
 from app.schemas.document import DocumentResponse, DocumentVerify
+from app.schemas.sadc_document import SadcDocumentRequest
 from app.services.document import DocumentService
 
 router = APIRouter()
@@ -105,3 +106,58 @@ async def verify_document(
         return DocumentResponse.model_validate(doc)
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/generate-pdf")
+async def generate_sadc_pdf(
+    body: SadcDocumentRequest,
+    tenant: Tenant = Depends(get_current_tenant),
+    user: User = Depends(get_current_user),
+):
+    """Generate a SADC-compliant document PDF from structured data.
+    
+    Accepts a full SadcDocument with TemplateConfig and returns PDF bytes.
+    Supports Classic Letterhead and Modern Compact templates.
+    """
+    from app.services.pdf_generator import pdf_generator
+
+    # Map template ID to template file
+    template_map = {
+        "classic": "sadc_invoice_classic.html",
+        "modern": "sadc_invoice_modern.html",
+    }
+    template_name = template_map.get(body.templateId, "sadc_invoice_classic.html")
+
+    # Check if issuer has VAT items to determine has_vat flag
+    has_vat = any(
+        item.vatPercent is not None and item.vatPercent > 0
+        for item in body.lineItems
+    )
+
+    # Build template data
+    data = {
+        "meta": body.meta.model_dump(),
+        "issuer": body.issuer.model_dump(),
+        "recipient": body.recipient.model_dump(),
+        "lineItems": [item.model_dump() for item in body.lineItems],
+        "totals": body.totals.model_dump(),
+        "banking": body.banking.model_dump() if body.banking else None,
+        "footer": body.footer.model_dump() if body.footer else None,
+        "config": body.templateConfig.model_dump(),
+        "has_vat_items": has_vat,
+    }
+
+    try:
+        pdf_bytes = await pdf_generator.generate_sadc_document(data, template_name)
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{body.meta.documentNumber}.pdf"'
+            },
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"PDF generation failed: {e}",
+        )

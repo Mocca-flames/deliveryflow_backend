@@ -1,17 +1,17 @@
 """
 Invoice service — CRUD operations, 70/30 split, milestone transitions.
 """
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import DeliveryFlowError
 from app.models.invoice import Invoice
 from app.models.trip import Trip
 from app.state_machines.invoice import transition_invoice
-from app.core.exceptions import DeliveryFlowError
 
 
 class InvoiceService:
@@ -30,7 +30,7 @@ class InvoiceService:
         if trip.quoted_amount is None:
             raise DeliveryFlowError("Trip has no quoted amount")
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         invoice_number = f"INV-{trip.reference}-{now.strftime('%Y%m%d')}"
 
         # Set due date to 30 days from now

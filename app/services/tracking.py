@@ -1,14 +1,12 @@
 """
 Tracking service — public tracking link data.
 """
-from uuid import UUID
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.trip import Trip
-from app.models.document import Document
 from app.core.exceptions import TokenNotFoundError
+from app.models.document import Document
+from app.models.trip import Trip
 
 
 class TrackingService:
@@ -27,7 +25,7 @@ class TrackingService:
         # Get uploaded documents
         doc_stmt = select(Document).where(
             Document.trip_id == trip.id,
-            Document.verified == True,
+            Document.verified.is_(True),
         )
         doc_result = await self.db.execute(doc_stmt)
         documents = list(doc_result.scalars().all())

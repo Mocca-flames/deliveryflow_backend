@@ -11,18 +11,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
-from app.deps import require_super_admin, get_current_user
+from app.deps import require_super_admin
 from app.models.user import User
+from app.services.llm_extractor import get_extractor
 from app.services.template_registry import (
     DocumentTemplate,
-    TemplateField,
     FieldValidation,
+    TemplateField,
     get_registry,
 )
-from app.services.llm_extractor import get_extractor
 
 router = APIRouter()
 
@@ -260,6 +260,7 @@ async def test_extraction(
 ):
     """Test document extraction with a sample image."""
     from io import BytesIO
+
     from PIL import Image
 
     contents = await file.read()

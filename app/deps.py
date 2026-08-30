@@ -1,14 +1,14 @@
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.config import get_settings
-from app.models.user import User
 from app.models.tenant import Tenant
+from app.models.user import User
 from app.notifications.email.brevo import BrevoProvider
 from app.notifications.email.mailjet import MailjetProvider
 from app.notifications.email.router import EmailRouter
@@ -65,14 +65,26 @@ async def get_current_user(
 
 async def get_current_tenant(
     user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ) -> Tenant:
     if user.role == "super_admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Super admin must use tenant-specific endpoints",
         )
-    # Tenant is loaded via relationship
-    return user.tenant
+    if user.tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="User is not associated with a tenant",
+        )
+    # Load explicitly to avoid lazy-loading the relationship inside the async session.
+    tenant = await db.get(Tenant, user.tenant_id)
+    if tenant is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tenant not found",
+        )
+    return tenant
 
 
 async def require_super_admin(user: User = Depends(get_current_user)) -> User:

@@ -4,15 +4,14 @@ Invoice milestone state machine.
 Transitions are explicit functions — never direct column updates.
 Each transition writes to invoice_milestones (append-only log).
 """
-from datetime import datetime, timezone
+import uuid
+from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.invoice import Invoice, InvoiceMilestone
 from app.core.exceptions import InvalidStateTransitionError
-
+from app.models.invoice import Invoice, InvoiceMilestone
 
 # Valid transitions: current_status -> list of allowed next statuses
 VALID_TRANSITIONS = {
@@ -54,18 +53,15 @@ async def transition_invoice(
     db: AsyncSession,
     invoice: Invoice,
     new_status: str,
-    triggered_by: "uuid.UUID | None" = None,
+    triggered_by: uuid.UUID | None = None,
     trigger_source: str = "manual",
     notes: str | None = None,
 ) -> Invoice:
     """Transition invoice to new status, recording milestone event."""
-    from app.core.exceptions import InvalidStateTransitionError
-    import uuid
-
     validate_transition(invoice.status, new_status)
 
     old_status = invoice.status
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     # Update invoice status
     invoice.status = new_status

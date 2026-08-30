@@ -13,14 +13,35 @@ backend/
 ├── app/
 │   ├── __init__.py
 │   ├── main.py                  # FastAPI app factory, lifespan, middleware
-│   ├── config.py                # Pydantic Settings (env-based config, email services, OTP settings)
-│   ├── deps.py                  # Dependency injection (get_db, get_current_user, get_tenant, get_email_router)
+│   ├── config.py                # Pydantic Settings (env-based config)
+│   ├── deps.py                  # Dependency injection (get_db, get_current_user, get_tenant)
+│   ├── debug_inspector.py       # Debug mode request inspector middleware
 │   │
-│   ├── models/                  # SQLAlchemy 2.0 ORM models
+│   ├── core/                    # Platform backbone (never extracted)
+│   │   ├── __init__.py
+│   │   ├── config.py            # Centralized settings with module-level sections
+│   │   ├── security.py          # JWT creation/verification, password hashing
+│   │   ├── token.py             # Tokenized link generation/validation
+│   │   ├── exceptions.py        # Custom exception classes
+│   │   ├── events.py            # In-process Event Bus (pub/sub between modules)
+│   │   ├── registry.py          # Module registry — INSTALLED_MODULES loading
+│   │   ├── currency.py          # Currency code validation (ZAR default, no logic yet)
+│   │   ├── audit.py             # Cross-cutting audit logging (SQLAlchemy listeners)
+│   │   └── documents/           # SADC cross-border document types (modular)
+│   │       ├── __init__.py
+│   │       ├── commercial.py
+│   │       ├── transport.py
+│   │       ├── customs.py
+│   │       ├── permits.py
+│   │       ├── insurance.py
+│   │       ├── driver_pack.py
+│   │       └── registry.py
+│   │
+│   ├── models/                  # SQLAlchemy 2.0 ORM models (shared across modules)
 │   │   ├── __init__.py
 │   │   ├── base.py              # Base model, mixins (TimestampMixin, UUIDPrimaryKey)
-│   │   ├── tenant.py            # Tenant (broker) model
-│   │   ├── user.py              # User model (broker staff, platform admin, OTP fields, email verification)
+│   │   ├── tenant.py            # Tenant (multi-tenant root)
+│   │   ├── user.py              # User model (OTP fields, email verification)
 │   │   ├── carrier.py           # Carrier (lightweight, under broker tenant)
 │   │   ├── driver.py            # Driver (linked to carrier)
 │   │   ├── vehicle.py           # Vehicle (linked to carrier)
@@ -30,12 +51,13 @@ backend/
 │   │   ├── document.py          # Document references (uploaded files)
 │   │   ├── drivers_pack.py      # Driver's Pack (KYC per driver/vehicle)
 │   │   ├── sync_event.py        # Outbox sync events from Flutter
-│   │   └── notification_log.py  # Notification audit trail
+│   │   ├── notification_log.py  # Notification audit trail
+│   │   └── enums.py             # BusinessType enum, shared enums
 │   │
 │   ├── schemas/                 # Pydantic v2 request/response schemas
 │   │   ├── __init__.py
 │   │   ├── common.py            # Shared schemas (Pagination, ErrorResponse)
-│   │   ├── auth.py              # Login, token refresh, OTP, register, password reset
+│   │   ├── auth.py
 │   │   ├── tenant.py
 │   │   ├── carrier.py
 │   │   ├── driver.py
@@ -44,104 +66,121 @@ backend/
 │   │   ├── invoice.py
 │   │   ├── document.py
 │   │   ├── drivers_pack.py
-│   │   └── sync.py              # Outbox sync schemas
+│   │   ├── sync.py
+│   │   └── sadc_document.py
 │   │
 │   ├── api/                     # Route modules
 │   │   ├── __init__.py
-│   │   ├── v1/
+│   │   ├── v1/                  # Versioned API (authenticated)
 │   │   │   ├── __init__.py
 │   │   │   ├── router.py        # v1 API router aggregation
-│   │   │   ├── auth.py          # POST /auth/login, /auth/refresh, /auth/register, /auth/verify-otp, /auth/resend-otp, /auth/forgot-password, /auth/reset-password, GET /auth/me
-│   │   │   ├── tenants.py       # CRUD (super-admin only)
-│   │   │   ├── users.py         # CRUD (tenant-scoped)
-│   │   │   ├── carriers.py      # CRUD under tenant
-│   │   │   ├── drivers.py       # CRUD under tenant
-│   │   │   ├── vehicles.py      # CRUD under tenant
-│   │   │   ├── trips.py         # Full trip lifecycle
-│   │   │   ├── invoices.py      # Invoice operations, milestone triggers
-│   │   │   ├── documents.py     # Upload/download, pre-signed URLs
-│   │   │   ├── drivers_packs.py # KYC submission, status, admin review
-│   │   │   ├── sync.py          # Flutter outbox sync endpoint
-│   │   │   └── notifications.py # Notification preferences, history
-│   │   └── public/
+│   │   │   ├── auth.py
+│   │   │   ├── tenant.py
+│   │   │   ├── admin.py
+│   │   │   ├── trips.py
+│   │   │   ├── invoices.py
+│   │   │   ├── drivers_packs.py
+│   │   │   ├── documents.py
+│   │   │   ├── sync.py
+│   │   │   └── templates.py
+│   │   └── public/              # No-auth public endpoints
 │   │       ├── __init__.py
-│   │       ├── tracking.py      # GET /track/{token} — public, no auth
-│   │       └── carrier_portal.py # GET/POST /carrier/{token} — carrier actions
+│   │       ├── tracking.py
+│   │       └── carrier_portal.py
 │   │
-│   ├── core/                    # Domain logic, state machines
+│   ├── modules/                 # Feature modules (plugin pattern)
 │   │   ├── __init__.py
-│   │   ├── security.py          # JWT creation/verification, password hashing
-│   │   ├── token.py             # Tokenized link generation/validation
-│   │   ├── exceptions.py        # Custom exception classes
-│   │   ├── events.py            # Event types for internal pub/sub
-│   │   ├── currency.py          # Currency code validation (ZAR default, no logic yet)
-│   │   └── documents/           # SADC cross-border document types (modular)
-│   │       ├── __init__.py      # Public API — re-exports registry functions
-│   │       ├── commercial.py    # Invoice, Packing List, Certificate of Origin, DG, Phytosanitary, Veterinary
-│   │       ├── transport.py     # Road Waybill, CMR, Consignment Note, DA 187 Manifest
-│   │       ├── customs.py       # SAD 500/502/505/507, Export/Import Declarations, Transit Bond, SRCTD
-│   │       ├── permits.py       # CBRTA, SADC Driver Cert, PrDP, Import/Export Permits
-│   │       ├── insurance.py     # COMESA Yellow Card, GIT Insurance, TIP
-│   │       ├── driver_pack.py   # Vehicle Licence, Driver's Licence, ID, Insurance Letter
-│   │       └── registry.py      # Central registry, route-aware requirements, SACU logic
+│   │   ├── auth/                # Authentication module
+│   │   │   ├── __init__.py      # Public API exports
+│   │   │   ├── service.py       # Auth business logic
+│   │   │   ├── events.py        # Domain events: user.registered, user.logged_in
+│   │   │   └── handlers.py      # Event handlers from other modules
+│   │   ├── companies/           # Company/Tenant management
+│   │   │   ├── __init__.py
+│   │   │   ├── service.py
+│   │   │   ├── events.py        # company.created, company.settings_changed
+│   │   │   └── handlers.py
+│   │   ├── shipments/           # Trip/Contract lifecycle
+│   │   │   ├── __init__.py
+│   │   │   ├── service.py
+│   │   │   ├── events.py        # shipment.created, shipment.delivered
+│   │   │   └── handlers.py
+│   │   ├── documents/           # Document management
+│   │   │   ├── __init__.py
+│   │   │   ├── service.py
+│   │   │   ├── events.py        # document.uploaded, document.verified
+│   │   │   └── handlers.py
+│   │   ├── ocr/                 # OCR/LLM extraction (future: extractable service)
+│   │   │   ├── __init__.py
+│   │   │   ├── service.py
+│   │   │   ├── events.py        # ocr.completed, ocr.failed
+│   │   │   └── handlers.py
+│   │   ├── invoices/            # Invoice lifecycle
+│   │   │   ├── __init__.py
+│   │   │   ├── service.py
+│   │   │   ├── events.py        # invoice.issued, invoice.paid
+│   │   │   └── handlers.py
+│   │   ├── notifications/       # Notification dispatch (future: extractable service)
+│   │   │   ├── __init__.py
+│   │   │   ├── service.py
+│   │   │   ├── events.py        # notification.requested
+│   │   │   └── handlers.py
+│   │   └── audit/               # Audit logging (cross-cutting, never extracted)
+│   │       ├── __init__.py
+│   │       ├── service.py
+│   │       └── handlers.py      # Subscribes to ALL module events
 │   │
 │   ├── state_machines/          # Milestone & KYC state machines
 │   │   ├── __init__.py
-│   │   ├── invoice.py           # Invoice milestone state machine
-│   │   └── drivers_pack.py      # Driver's Pack state machine
+│   │   ├── invoice.py
+│   │   └── drivers_pack.py
 │   │
-│   ├── services/                # Business logic layer
+│   ├── services/                # Legacy services (migrating to modules/)
 │   │   ├── __init__.py
-│   │   ├── auth.py              # Authentication service
-│   │   ├── otp.py               # OTP generation, verification, email sending
-│   │   ├── trip.py              # Trip lifecycle service
-│   │   ├── invoice.py           # Invoice service (milestone transitions, 70/30 split)
-│   │   ├── document.py          # Document upload, storage, retrieval
-│   │   ├── drivers_pack.py      # KYC orchestration, LLM extraction trigger, review queue
-│   │   ├── llm_extractor.py     # Vision LLM document extraction (Mistral/Gemini/OpenRouter)
-│   │   ├── template_registry.py # Document template loader, prompt builder, validator
-│   │   ├── notification.py      # NotificationDispatcher interface
-│   │   ├── sync.py              # Outbox sync processing
-│   │   └── tracking.py          # Tokenized tracking link data
-│   │
-│   ├── document_templates/      # YAML templates for LLM extraction (admin-configurable)
-│   │   ├── vehicle_licence.yaml
-│   │   ├── drivers_licence.yaml
-│   │   ├── id_document.yaml
-│   │   ├── insurance_letter.yaml
-│   │   ├── pod_photo.yaml
-│   │   ├── pod_document.yaml
-│   │   ├── cross_border_permit.yaml
-│   │   ├── customs_declaration.yaml
-│   │   ├── comesa_yellow_card.yaml
-│   │   ├── transit_bond.yaml
-│   │   └── certificate_of_origin.yaml
+│   │   ├── auth.py
+│   │   ├── otp.py
+│   │   ├── trip.py
+│   │   ├── invoice.py
+│   │   ├── document.py
+│   │   ├── drivers_pack.py
+│   │   ├── llm_extractor.py
+│   │   ├── template_registry.py
+│   │   ├── notification.py
+│   │   ├── sync.py
+│   │   ├── tracking.py
+│   │   ├── pdf_generator.py
+│   │   └── tenant.py
 │   │
 │   ├── notifications/           # Pluggable notifier adapters
 │   │   ├── __init__.py
-│   │   ├── base.py              # Abstract Notifier interface
-│   │   ├── whatsapp.py          # Meta Cloud API adapter (Phase 2)
-│   │   ├── sms.py               # SMS adapter (stub for future)
-│   │   ├── console.py           # Console adapter (dev/debug)
-│   │   └── email/               # Dual-provider email (Brevo + Mailjet)
+│   │   ├── base.py
+│   │   ├── whatsapp.py
+│   │   ├── console.py
+│   │   ├── dispatcher.py
+│   │   └── email/
 │   │       ├── __init__.py
-│   │       ├── base.py          # Abstract EmailProvider + QuotaExceededError
-│   │       ├── brevo.py         # Brevo API v3 adapter
-│   │   ├── mailjet.py       # Mailjet API v3 adapter
-│   │       └── router.py        # EmailRouter — random selection + depletion fallback
+│   │       ├── base.py
+│   │       ├── brevo.py
+│   │       ├── mailjet.py
+│   │       └── router.py
 │   │
 │   ├── storage/                 # Object storage abstraction
 │   │   ├── __init__.py
-│   │   ├── base.py              # Abstract StorageBackend interface
-│   │   └── seaweed.py           # SeaweedFS S3-compatible adapter
+│   │   ├── base.py
+│   │   └── seaweed.py
 │   │
 │   ├── tasks/                   # Taskiq background tasks
 │   │   ├── __init__.py
-│   │   ├── worker.py            # Taskiq worker config
-│   │   ├── invoice.py           # Invoice scheduled tasks
-│   │   ├── drivers_pack.py      # Pack expiry re-validation
-│   │   ├── notifications.py     # Async notification dispatch
-│   │   └── sync.py              # Sync event processing
+│   │   ├── worker.py
+│   │   ├── ocr_tasks.py
+│   │   ├── notification_tasks.py
+│   │   └── document_tasks.py
+│   │
+│   ├── document_templates/      # YAML templates for LLM extraction
+│   │   └── *.yaml
+│   │
+│   ├── templates/               # Jinja2 HTML/CSS PDF templates
+│   │   └── *.html
 │   │
 │   └── migrations/              # Alembic migrations
 │       ├── env.py
@@ -150,19 +189,24 @@ backend/
 │
 ├── tests/
 │   ├── __init__.py
-│   ├── conftest.py              # Fixtures, test DB setup
-│   ├── test_brevo_email.py      # Email provider integration test
-│   ├── test_models/
-│   ├── test_api/
-│   ├── test_services/
+│   ├── conftest.py
+│   ├── test_phase1.py
+│   ├── test_brevo_email.py
+│   ├── test_document_template_integration.py
 │   ├── test_state_machines/
-│   └── test_tasks/
+│   └── docker_smoke_test.py
+│
+├── scripts/
+│   ├── create_superadmin.py
+│   └── provision_tenant.py
 │
 ├── alembic.ini
 ├── pyproject.toml
 ├── Dockerfile
-├── docker-compose.yml           # Local dev: postgres, redis, seaweed
+├── docker-compose.yml
+├── .env
 ├── .env.example
+├── entrypoint.sh
 └── README.md
 ```
 
@@ -1549,13 +1593,304 @@ No WebSocket needed — the tracker provider handles their own real-time layer.
 
 ---
 
-## 17. Open Items for Backend
+## 18. Scalable Module Architecture (Backend Implementation)
+
+### 18.1 Module Plugin System
+
+Every feature is a **module** with a standard structure. Modules can be added or removed without rewriting core code.
+
+**Standard module structure:**
+
+```
+modules/{module_name}/
+├── __init__.py          # Public API exports
+├── service.py           # Business logic
+├── events.py            # Domain events published by this module
+├── handlers.py          # Event handlers (subscribed to other modules' events)
+└── config.py            # Module-specific settings (optional)
+```
+
+**Module lifecycle:**
+
+```python
+# modules/shipments/__init__.py
+from .service import ShipmentService
+from .events import ShipmentCreated, ShipmentDelivered
+from .handlers import on_document_verified
+
+# Register event handlers
+def register_handlers(event_bus):
+    event_bus.subscribe("document.verified", on_document_verified)
+```
+
+**Rules:**
+- Modules communicate only through the **Event Bus** — never import from each other's `service.py`
+- Each module exports a **public API** via `__init__.py`
+- A module can be disabled by removing it from `INSTALLED_MODULES`
+- Modules are lazily loaded — only initialized when registered
+
+### 18.2 Internal Event Bus
+
+In-process event bus for module communication (no external broker needed for MVP).
+
+```python
+# core/events.py
+import asyncio
+from collections import defaultdict
+from typing import Callable, Any
+
+class EventBus:
+    """In-process event bus for loose coupling between modules."""
+
+    def __init__(self):
+        self._handlers: dict[str, list[Callable]] = defaultdict(list)
+
+    def subscribe(self, event_type: str, handler: Callable):
+        """Register an async handler for an event type."""
+        self._handlers[event_type].append(handler)
+
+    async def publish(self, event_type: str, payload: dict[str, Any]):
+        """Publish an event to all subscribed handlers."""
+        for handler in self._handlers.get(event_type, []):
+            try:
+                if asyncio.iscoroutinefunction(handler):
+                    await handler(payload)
+                else:
+                    handler(payload)
+            except Exception:
+                # Log error but don't crash the publisher
+                pass
+
+    def clear(self):
+        """Remove all handlers (for testing)."""
+        self._handlers.clear()
+
+# Global singleton
+event_bus = EventBus()
+```
+
+**Event naming convention:**
+
+```
+{module}.{past_tense_action}
+
+Examples:
+document.uploaded
+document.verified
+shipment.created
+shipment.delivered
+invoice.issued
+invoice.paid
+ocr.completed
+ocr.failed
+notification.requested
+```
+
+**Example: Cross-module workflow**
+
+```python
+# modules/ocr/handlers.py
+async def on_document_uploaded(payload: dict):
+    """Trigger OCR when document is uploaded."""
+    from app.tasks.worker import run_ocr_extraction
+    await run_ocr_extraction.kiq(payload["document_id"])
+
+# modules/shipments/handlers.py
+async def on_ocr_completed(payload: dict):
+    """Update shipment when OCR completes successfully."""
+    from app.core.events import event_bus
+    svc = ShipmentService(db=...)
+    await svc.check_document_completion(payload["shipment_id"])
+
+# Registration in modules/ocr/__init__.py
+def register_handlers(bus):
+    bus.subscribe("document.uploaded", on_document_uploaded)
+```
+
+### 18.3 Module Registry
+
+Core maintains a registry of active modules:
+
+```python
+# core/registry.py
+import importlib
+from app.core.events import event_bus
+
+INSTALLED_MODULES = [
+    "app.modules.auth",
+    "app.modules.companies",
+    "app.modules.shipments",
+    "app.modules.documents",
+    "app.modules.ocr",
+    "app.modules.invoices",
+    "app.modules.notifications",
+    "app.modules.audit",
+]
+
+def load_modules():
+    """Initialize all installed modules and register their event handlers."""
+    for module_path in INSTALLED_MODULES:
+        module = importlib.import_module(module_path)
+        if hasattr(module, "register_handlers"):
+            module.register_handlers(event_bus)
+```
+
+**Adding a new module:**
+
+1. Create `modules/fleet/` with standard structure
+2. Add `"app.modules.fleet"` to `INSTALLED_MODULES`
+3. Implement `register_handlers(event_bus)` to subscribe to events
+4. Run `alembic upgrade head` for new tables
+5. Routes are auto-discovered via `api/v1/router.py`
+
+**Removing a module:**
+
+1. Remove from `INSTALLED_MODULES`
+2. Module's routes, events, and handlers are not loaded
+3. Database tables remain (no destructive migration)
+
+### 18.4 Cross-Cutting Audit Logging
+
+Audit logging is a **cross-cutting concern** — it subscribes to ALL module events.
+
+```python
+# modules/audit/handlers.py
+from app.core.events import event_bus
+from app.models.audit_log import AuditLog
+
+async def log_any_event(payload: dict):
+    """Generic event logger — subscribes to all events."""
+    event_type = payload.get("_event_type", "unknown")
+    entity_type = payload.get("_entity_type", "unknown")
+    entity_id = payload.get("_entity_id")
+    tenant_id = payload.get("_tenant_id")
+    user_id = payload.get("_user_id")
+
+    async with get_db() as db:
+        log = AuditLog(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            action=event_type,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            metadata=payload,
+        )
+        db.add(log)
+        await db.commit()
+
+def register_handlers(bus):
+    # Wildcard subscription — log everything
+    bus.subscribe("*", log_any_event)
+```
+
+**AuditLog model:**
+
+```sql
+CREATE TABLE audit_logs (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tenant_id       UUID REFERENCES tenants(id),
+    user_id         UUID REFERENCES users(id),
+    action          TEXT NOT NULL,          -- e.g., "document.uploaded"
+    entity_type     TEXT NOT NULL,          -- e.g., "document"
+    entity_id       UUID,
+    metadata        JSONB DEFAULT '{}',
+    created_at      TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX idx_audit_logs_tenant ON audit_logs(tenant_id, created_at);
+CREATE INDEX idx_audit_logs_entity ON audit_logs(entity_type, entity_id);
+```
+
+### 18.5 Configuration Architecture
+
+Module-specific configuration is isolated:
+
+```python
+# modules/ocr/config.py
+from pydantic_settings import BaseSettings
+
+class OCRConfig(BaseSettings):
+    model_config = {"env_prefix": "OCR_"}
+
+    PROVIDER: str = "mistral"
+    MAX_CONCURRENT_PAGES: int = 3
+    CONFIDENCE_THRESHOLD: float = 0.7
+    FALLBACK_PROVIDERS: list[str] = ["google", "openrouter"]
+```
+
+**Environment variables by module:**
+
+```
+# Core
+DATABASE_URL=postgresql+asyncpg://...
+REDIS_URL=redis://localhost:6379
+JWT_SECRET=...
+
+# OCR Module
+OCR_PROVIDER=mistral
+OCR_MAX_CONCURRENT_PAGES=3
+MISTRAL_API_KEY=...
+
+# Notification Module
+NOTIFICATION_WHATSAPP_API_KEY=...
+NOTIFICATION_EMAIL_PROVIDER=brevo
+
+# Storage Module
+STORAGE_BACKEND=seaweed
+STORAGE_BUCKET=deliveryflow
+```
+
+### 18.6 Module Extraction Path
+
+When a module outgrows the monolith, it follows this extraction process:
+
+```
+Stage 1: In-Process Module
+├── Code in modules/{name}/
+├── Events via in-process EventBus
+├── Direct DB queries
+└── Shared PostgreSQL
+
+Stage 2: Extracted Service
+├── Separate FastAPI application
+├── Events via Redis pub/sub
+├── API-to-API communication
+├── Own database schema (or shared DB)
+└── Own deployment pipeline
+
+Stage 3: Independent Service
+├── Separate repository
+├── Own database
+├── Own scaling rules
+├── Own team
+└── Own monitoring
+```
+
+**First extraction candidates (when needed):**
+
+| Module | Trigger | Target |
+|--------|---------|--------|
+| OCR | CPU-intensive, needs GPU | Separate worker service |
+| Notifications | Different deployment cadence | Separate service with own queue |
+| Payments | Security/compliance (PCI) | Separate service |
+
+**What stays in core forever:**
+- Auth
+- Tenants
+- Event Bus
+- Audit
+
+---
+
+## 19. Open Items for Backend
 
 - [ ] Pagination strategy (cursor vs offset) — finalize during API implementation.
 - [ ] Rate limiting per tenant — Caddy or FastAPI middleware decision.
 - [ ] Document versioning — Phase 1 stores latest only; versioning deferred.
-- [ ] Audit logging for all mutations — implement via SQLAlchemy event listeners.
 - [ ] Third-party car tracker webhook format — define schema when provider selected.
+- [ ] Migrate existing services/ to modules/ pattern (gradual, not big-bang).
+- [ ] Implement wildcard event subscription for audit module.
+- [ ] Add module-level test isolation (each module tests independently).
 
 ---
 

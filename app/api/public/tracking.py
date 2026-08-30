@@ -4,9 +4,9 @@ Public tracking API routes — no auth required.
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import TokenNotFoundError
 from app.deps import get_db
 from app.services.tracking import TrackingService
-from app.core.exceptions import TokenNotFoundError
 
 router = APIRouter()
 

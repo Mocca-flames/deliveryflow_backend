@@ -12,7 +12,6 @@ from app.config import get_settings
 from app.notifications.email.brevo import BrevoProvider
 from app.notifications.email.mailjet import MailjetProvider
 
-
 RECIPIENTS = [
     "juniorflamebet@gmail.com",
     "juniorbypassfrp@gmail.com",

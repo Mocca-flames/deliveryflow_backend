@@ -77,7 +77,7 @@ class TemplateRegistry:
 
         for yaml_file in sorted(TEMPLATES_DIR.glob("*.yaml")):
             try:
-                with open(yaml_file, "r", encoding="utf-8") as f:
+                with open(yaml_file, encoding="utf-8") as f:
                     data = yaml.safe_load(f)
                 template = DocumentTemplate(**data)
                 self._templates[template.doc_type] = template

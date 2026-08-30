@@ -5,8 +5,8 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.notifications.dispatcher import notification_dispatcher
 from app.core.exceptions import NotificationError
+from app.notifications.dispatcher import notification_dispatcher
 
 
 class NotificationService:

@@ -1,14 +1,13 @@
 """
 Sync event service — process offline sync events from Flutter outbox.
 """
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.sync_event import SyncEvent
-from app.core.exceptions import DeliveryFlowError
 
 
 class SyncService:
@@ -40,7 +39,7 @@ class SyncService:
                 payload=event_data["payload"],
                 idempotency_key=event_data["idempotency_key"],
                 processed=False,
-                created_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
             )
             self.db.add(event)
             processed.append(event)
@@ -54,7 +53,7 @@ class SyncService:
             select(SyncEvent)
             .where(
                 SyncEvent.tenant_id == tenant_id,
-                SyncEvent.processed == False,
+                not SyncEvent.processed,
             )
             .order_by(SyncEvent.created_at)
             .limit(limit)
@@ -67,5 +66,5 @@ class SyncService:
         event = await self.db.get(SyncEvent, event_id)
         if event:
             event.processed = True
-            event.processed_at = datetime.now(timezone.utc)
+            event.processed_at = datetime.now(UTC)
             await self.db.flush()

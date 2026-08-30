@@ -1,19 +1,19 @@
 """
 Trip service — CRUD operations and lifecycle management.
 """
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.trip import Trip
-from app.models.document import TripDocumentRequirement
-from app.core.documents import get_required_doc_types
-from app.core.token import generate_tracking_token, generate_carrier_token
-from app.core.exceptions import DeliveryFlowError, DriverPackGateError
-from app.schemas.trip import TripCreate, TripAssign
 from app.config import get_settings
+from app.core.documents import get_required_doc_types
+from app.core.exceptions import DriverPackGateError
+from app.core.token import generate_carrier_token, generate_tracking_token
+from app.models.document import TripDocumentRequirement
+from app.models.trip import Trip
+from app.schemas.trip import TripAssign, TripCreate
 
 settings = get_settings()
 
@@ -24,7 +24,7 @@ class TripService:
 
     async def create(self, tenant_id: UUID, data: TripCreate) -> Trip:
         """Create a new trip with document requirements."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         trip = Trip(
             tenant_id=tenant_id,
             reference=data.reference,
@@ -114,35 +114,36 @@ class TripService:
         trip.driver_id = data.driver_id
         trip.vehicle_id = data.vehicle_id
         trip.status = "assigned"
-        trip.updated_at = datetime.now(timezone.utc)
+        trip.updated_at = datetime.now(UTC)
         await self.db.flush()
         return trip
 
     async def begin_transit(self, trip: Trip) -> Trip:
         """Mark trip as in transit."""
         trip.status = "in_transit"
-        trip.updated_at = datetime.now(timezone.utc)
+        trip.updated_at = datetime.now(UTC)
         await self.db.flush()
         return trip
 
     async def complete(self, trip: Trip) -> Trip:
         """Mark trip as completed."""
         trip.status = "completed"
-        trip.updated_at = datetime.now(timezone.utc)
+        trip.updated_at = datetime.now(UTC)
         await self.db.flush()
         return trip
 
     async def cancel(self, trip: Trip) -> Trip:
         """Cancel trip."""
         trip.status = "cancelled"
-        trip.updated_at = datetime.now(timezone.utc)
+        trip.updated_at = datetime.now(UTC)
         await self.db.flush()
         return trip
 
     async def get_doc_checklist(self, trip_id: UUID, tenant_id: UUID) -> dict:
         """Get document checklist for a trip."""
         from sqlalchemy import select
-        from app.models.document import TripDocumentRequirement, Document
+
+        from app.models.document import TripDocumentRequirement
 
         stmt = select(TripDocumentRequirement).where(
             TripDocumentRequirement.trip_id == trip_id,

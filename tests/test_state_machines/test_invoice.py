@@ -1,7 +1,7 @@
 import pytest
 
-from app.state_machines.invoice import validate_transition, VALID_TRANSITIONS
 from app.core.exceptions import InvalidStateTransitionError
+from app.state_machines.invoice import VALID_TRANSITIONS, validate_transition
 
 
 class TestInvoiceStateMachine:

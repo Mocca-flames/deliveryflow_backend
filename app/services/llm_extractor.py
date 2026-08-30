@@ -21,12 +21,12 @@ from dotenv import load_dotenv
 from PIL import Image
 
 from app.services.template_registry import (
+    DocumentTemplate,
+    ValidationResult,
     build_auto_detect_prompt,
     build_extraction_prompt,
     get_registry,
     validate_extraction,
-    DocumentTemplate,
-    ValidationResult,
 )
 
 load_dotenv()
@@ -303,11 +303,7 @@ class LLMDocumentExtractor:
                 except Exception as e:
                     last_error = e
                     err_str = str(e).lower()
-                    if "429" in err_str or "rate limit" in err_str:
-                        if attempt < 2:
-                            time.sleep(2.0 * (attempt + 1))
-                            continue
-                    elif "5" in err_str and ("error" in err_str or "unavailable" in err_str):
+                    if "429" in err_str or "rate limit" in err_str or "5" in err_str and ("error" in err_str or "unavailable" in err_str):
                         if attempt < 2:
                             time.sleep(2.0 * (attempt + 1))
                             continue

@@ -17,7 +17,7 @@ class ConsoleNotifier(Notifier):
         body: str,
         metadata: dict[str, Any] | None = None,
     ) -> bool:
-        print(f"[NOTIFICATION] Channel: console")
+        print("[NOTIFICATION] Channel: console")
         print(f"  To: {recipient}")
         print(f"  Subject: {subject}")
         print(f"  Body: {body}")

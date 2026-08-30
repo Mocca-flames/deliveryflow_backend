@@ -29,6 +29,8 @@ services:
         condition: service_started
       migrate:
         condition: service_completed_successfully
+    volumes:
+      - ./app:/app/app
     restart: unless-stopped
     networks:
       - df-network
@@ -46,6 +48,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - ./app:/app/app
     networks:
       - df-network
 
@@ -68,6 +72,8 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+    volumes:
+      - ./app:/app/app
     restart: unless-stopped
     networks:
       - df-network

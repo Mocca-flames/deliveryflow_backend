@@ -12,12 +12,17 @@ Usage:
         ALL_DOC_TYPES,
     )
 """
-from app.core.documents.commercial import ALL_COMMERCIAL, BY_KEY as COMMERCIAL_BY_KEY
-from app.core.documents.transport import ALL_TRANSPORT, BY_KEY as TRANSPORT_BY_KEY
-from app.core.documents.customs import ALL_CUSTOMS, BY_KEY as CUSTOMS_BY_KEY
-from app.core.documents.permits import ALL_PERMITS, BY_KEY as PERMITS_BY_KEY
-from app.core.documents.insurance import ALL_INSURANCE, BY_KEY as INSURANCE_BY_KEY
-from app.core.documents.driver_pack import ALL_DRIVER_PACK, BY_KEY as DRIVER_PACK_BY_KEY
+from app.core.documents.commercial import ALL_COMMERCIAL
+from app.core.documents.commercial import BY_KEY as COMMERCIAL_BY_KEY
+from app.core.documents.customs import ALL_CUSTOMS
+from app.core.documents.customs import BY_KEY as CUSTOMS_BY_KEY
+from app.core.documents.driver_pack import ALL_DRIVER_PACK
+from app.core.documents.insurance import ALL_INSURANCE
+from app.core.documents.insurance import BY_KEY as INSURANCE_BY_KEY
+from app.core.documents.permits import ALL_PERMITS
+from app.core.documents.permits import BY_KEY as PERMITS_BY_KEY
+from app.core.documents.transport import ALL_TRANSPORT
+from app.core.documents.transport import BY_KEY as TRANSPORT_BY_KEY
 
 # ── Categories ──────────────────────────────────────────────────
 COMMERCIAL = "commercial"

@@ -14,17 +14,6 @@ from app.config import get_settings
 from app.models.base import Base
 
 # Import all models so Alembic can detect them
-from app.models.user import User
-from app.models.tenant import Tenant
-from app.models.carrier import Carrier
-from app.models.driver import Driver
-from app.models.vehicle import Vehicle
-from app.models.trip import Trip
-from app.models.invoice import Invoice, InvoiceMilestone
-from app.models.document import Document, TripDocumentRequirement
-from app.models.drivers_pack import DriversPack
-from app.models.sync_event import SyncEvent
-from app.models.notification_log import NotificationLog
 
 # Alembic Config object
 config = context.config

@@ -3,16 +3,15 @@ Driver's Pack service — KYC orchestration, review queue, state transitions.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.models.drivers_pack import DriversPack
 from app.state_machines.drivers_pack import transition_drivers_pack
-from app.core.exceptions import DeliveryFlowError
-from app.config import get_settings
 
 settings = get_settings()
 
@@ -23,7 +22,7 @@ class DriversPackService:
 
     async def create(self, tenant_id: UUID, driver_id: UUID | None, vehicle_id: UUID | None) -> DriversPack:
         """Create a new drivers pack."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         pack = DriversPack(
             tenant_id=tenant_id,
             driver_id=driver_id,
@@ -135,7 +134,7 @@ class DriversPackService:
     async def check_and_expire(self) -> int:
         """Expire old packs. Returns count of expired packs."""
         expiry_days = settings.DRIVERS_PACK_EXPIRY_DAYS
-        cutoff = datetime.now(timezone.utc) - timedelta(days=expiry_days)
+        cutoff = datetime.now(UTC) - timedelta(days=expiry_days)
 
         stmt = select(DriversPack).where(
             DriversPack.status.in_(["pending", "auto_verified", "manually_cleared"]),

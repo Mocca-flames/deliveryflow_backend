@@ -1,7 +1,7 @@
 """
 Authentication service — JWT generation, login, token refresh.
 """
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from jose import jwt
@@ -9,10 +9,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.core.exceptions import DeliveryFlowError
 from app.core.security import verify_password
 from app.models.user import User
-from app.schemas.auth import LoginRequest, TokenResponse, RefreshRequest
-from app.core.exceptions import DeliveryFlowError
+from app.schemas.auth import LoginRequest, RefreshRequest, TokenResponse
 
 settings = get_settings()
 
@@ -24,7 +24,7 @@ class AuthenticationError(DeliveryFlowError):
 
 def create_access_token(user_id: UUID, tenant_id: UUID | None = None) -> str:
     """Create JWT access token."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expire = now + timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
     payload = {
         "sub": str(user_id),
@@ -38,7 +38,7 @@ def create_access_token(user_id: UUID, tenant_id: UUID | None = None) -> str:
 
 def create_refresh_token(user_id: UUID) -> str:
     """Create JWT refresh token."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expire = now + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRES_DAYS)
     payload = {
         "sub": str(user_id),

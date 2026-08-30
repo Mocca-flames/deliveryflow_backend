@@ -1,7 +1,5 @@
-import uuid
-
 from sqlalchemy import Boolean, Enum, String
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -21,6 +19,7 @@ class Tenant(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     )
     settings: Mapped[dict] = mapped_column(JSONB, default=dict)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False)
 
     # Relationships
     users = relationship("User", back_populates="tenant")

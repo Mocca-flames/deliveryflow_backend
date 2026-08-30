@@ -1,7 +1,7 @@
 """
 Document Registry — Classification and branding configuration for all document types.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
 
@@ -24,6 +24,9 @@ class DocumentType:
     requires_branding: bool = True  # Whether tenant branding is applied
     requires_carrier_branding: bool = False  # Whether carrier branding is used
     footer_key: str | None = None  # Key for custom footer in tenant.settings.branding
+    sadc_compatible: bool = False  # Whether this type supports SADC template rendering
+    template_variants: list[str] = field(default_factory=list)  # Available template variants
+    default_variant: str = "classic"  # Default template variant
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -42,6 +45,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         template_name="quotation.html",
         pdf_method="generate_quotation",
         footer_key="quotation_footer",
+        sadc_compatible=True,
+        template_variants=["classic", "modern"],
+        default_variant="classic",
     ),
     "proforma_invoice": DocumentType(
         key="proforma_invoice",
@@ -51,6 +57,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         template_name="proforma_invoice.html",
         pdf_method="generate_proforma_invoice",
         footer_key="proforma_footer",
+        sadc_compatible=True,
+        template_variants=["classic", "modern"],
+        default_variant="classic",
     ),
     "booking_confirmation": DocumentType(
         key="booking_confirmation",
@@ -69,6 +78,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         template_name="invoice.html",
         pdf_method="generate_invoice",
         footer_key="invoice_footer",
+        sadc_compatible=True,
+        template_variants=["classic", "modern"],
+        default_variant="classic",
     ),
     "credit_note": DocumentType(
         key="credit_note",
@@ -78,6 +90,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         template_name="credit_debit_note.html",
         pdf_method="generate_credit_note",
         footer_key="credit_debit_footer",
+        sadc_compatible=True,
+        template_variants=["classic", "modern"],
+        default_variant="classic",
     ),
     "debit_note": DocumentType(
         key="debit_note",
@@ -87,6 +102,9 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         template_name="credit_debit_note.html",
         pdf_method="generate_debit_note",
         footer_key="credit_debit_footer",
+        sadc_compatible=True,
+        template_variants=["classic", "modern"],
+        default_variant="classic",
     ),
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -133,6 +151,18 @@ DOCUMENT_TYPES: dict[str, DocumentType] = {
         template_name="waybill.html",
         pdf_method="generate_waybill",
         footer_key="footer_text",
+    ),
+    "delivery_note": DocumentType(
+        key="delivery_note",
+        label="Delivery Note",
+        description="Proof of delivery companion document for shipment handover",
+        category=DocumentCategory.OPERATIONAL,
+        template_name="delivery_note.html",
+        pdf_method="generate_delivery_note",
+        footer_key="delivery_note_footer",
+        sadc_compatible=True,
+        template_variants=["classic", "modern"],
+        default_variant="classic",
     ),
     "proof_of_delivery": DocumentType(
         key="proof_of_delivery",

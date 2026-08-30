@@ -3,9 +3,8 @@ OTP service — generate, store, verify one-time passwords for email verificatio
 """
 import logging
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
-import bcrypt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,7 +35,7 @@ async def create_otp(db: AsyncSession, user: User) -> str:
     """
     otp_code = generate_otp()
     user.otp_code = hash_password(otp_code)
-    user.otp_expires_at = datetime.now(timezone.utc) + timedelta(minutes=settings.OTP_EXPIRY_MINUTES)
+    user.otp_expires_at = datetime.now(UTC) + timedelta(minutes=settings.OTP_EXPIRY_MINUTES)
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -58,7 +57,7 @@ async def verify_otp(db: AsyncSession, email: str, otp: str) -> User:
     if user.otp_code is None:
         raise OtpError("No OTP pending. Please request a new one.")
 
-    if user.otp_expires_at is None or user.otp_expires_at < datetime.now(timezone.utc):
+    if user.otp_expires_at is None or user.otp_expires_at < datetime.now(UTC):
         raise OtpError("OTP has expired. Please request a new one.")
 
     if not verify_password(otp, user.otp_code):

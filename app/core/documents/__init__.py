@@ -16,15 +16,15 @@ Usage:
     from app.core.documents.registry import get_doc_type, get_category
 """
 from app.core.documents.registry import (
-    get_required_doc_types,
-    is_sacu_only,
-    get_doc_type,
-    get_category,
-    get_all_doc_keys,
-    ALL_TRIP_DOCS,
     ALL_BY_KEY,
+    ALL_TRIP_DOCS,
     CATEGORY_MAP,
     SACU_MEMBERS,
+    get_all_doc_keys,
+    get_category,
+    get_doc_type,
+    get_required_doc_types,
+    is_sacu_only,
 )
 
 __all__ = [

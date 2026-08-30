@@ -1,17 +1,19 @@
 """
 Tenant API routes — branding, settings, company details.
 """
-from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from typing import Any
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm.attributes import flag_modified
 
-from app.deps import get_db, get_current_user, get_current_tenant
-from app.models.user import User
+from app.core.document_registry import get_all_document_types
+from app.deps import get_current_tenant, get_current_user, get_db
 from app.models.tenant import Tenant
+from app.models.user import User
 from app.services.document import DocumentService
-from app.core.document_registry import get_all_document_types, DocumentCategory
 
 router = APIRouter()
 
@@ -91,8 +93,8 @@ class BrandingResponse(BaseModel):
     packing_list_footer: str | None = None
     grn_footer: str | None = None
     
-    # Document categories summary
-    document_categories: dict[str, list[str]] | None = None
+    # Document categories summary (each category contains list of dicts with keys)
+    document_categories: dict[str, list[dict[str, Any]]] | None = None
 
     model_config = {"from_attributes": True}
 
@@ -131,8 +133,12 @@ def _extract_branding_from_settings(tenant: Tenant) -> dict:
     }
 
 
-def _get_document_categories_summary() -> dict[str, list[str]]:
-    """Get summary of document types by category."""
+def _get_document_categories_summary() -> dict[str, list[dict[str, str]]]:
+    """Get summary of document types by category.
+
+    Returns a mapping of category -> list of objects with `key`, `label`, and
+    `description`.
+    """
     categories = {
         "client": [],
         "carrier": [],
@@ -140,11 +146,13 @@ def _get_document_categories_summary() -> dict[str, list[str]]:
     }
     
     for doc_type in get_all_document_types():
-        categories[doc_type.category.value].append({
-            "key": doc_type.key,
-            "label": doc_type.label,
-            "description": doc_type.description,
-        })
+        categories[doc_type.category.value].append(
+            {
+                "key": doc_type.key,
+                "label": doc_type.label,
+                "description": doc_type.description,
+            }
+        )
     
     return categories
 
@@ -171,26 +179,28 @@ async def update_branding(
     """Update tenant branding settings."""
     settings = tenant.settings or {}
     
-    # Update company details at top level
+    # Update company details at top level — only overwrite when the value is
+    # non-empty so that partial saves (e.g. onboarding step 3) don't clobber
+    # fields already populated in earlier steps.
     if body.name is not None:
         tenant.name = body.name
-    if body.address is not None:
+    if body.address is not None and body.address != "":
         settings["address"] = body.address
-    if body.city is not None:
+    if body.city is not None and body.city != "":
         settings["city"] = body.city
-    if body.postal_code is not None:
+    if body.postal_code is not None and body.postal_code != "":
         settings["postal_code"] = body.postal_code
-    if body.country is not None:
+    if body.country is not None and body.country != "":
         settings["country"] = body.country
-    if body.phone is not None:
+    if body.phone is not None and body.phone != "":
         settings["phone"] = body.phone
-    if body.email is not None:
+    if body.email is not None and body.email != "":
         settings["email"] = body.email
-    if body.website is not None:
+    if body.website is not None and body.website != "":
         settings["website"] = body.website
-    if body.registration_number is not None:
+    if body.registration_number is not None and body.registration_number != "":
         settings["registration_number"] = body.registration_number
-    if body.tax_number is not None:
+    if body.tax_number is not None and body.tax_number != "":
         settings["tax_number"] = body.tax_number
     
     # Update branding settings
@@ -218,8 +228,10 @@ async def update_branding(
     
     settings["branding"] = branding
     tenant.settings = settings
+    flag_modified(tenant, "settings")
     
     await db.flush()
+    await db.commit()
     
     # Return updated branding
     branding_data = _extract_branding_from_settings(tenant)
@@ -269,7 +281,9 @@ async def upload_logo(
     branding["logo_storage_key"] = doc.storage_key
     settings["branding"] = branding
     tenant.settings = settings
+    flag_modified(tenant, "settings")
     await db.flush()
+    await db.commit()
     
     return {"storage_key": doc.storage_key, "message": "Logo uploaded successfully"}
 
@@ -288,7 +302,9 @@ async def delete_logo(
         del branding["logo_storage_key"]
         settings["branding"] = branding
         tenant.settings = settings
+        flag_modified(tenant, "settings")
         await db.flush()
+        await db.commit()
     
     return {"message": "Logo removed successfully"}
 
@@ -300,4 +316,121 @@ async def get_document_types(
 ):
     """Get all available document types with their categories."""
     return _get_document_categories_summary()
+
+
+# ── Onboarding ──────────────────────────────────────
+
+
+class OnboardingStatusResponse(BaseModel):
+    """Response with onboarding status."""
+    onboarding_completed: bool
+    company_details_completed: bool
+
+    model_config = {"from_attributes": True}
+
+
+@router.get("/onboarding/status", response_model=OnboardingStatusResponse)
+async def get_onboarding_status(
+    tenant: Tenant = Depends(get_current_tenant),
+    user: User = Depends(get_current_user),
+):
+    """Check if tenant has completed onboarding."""
+    settings = tenant.settings or {}
+    company_details_completed = bool(
+        settings.get("address")
+        and settings.get("city")
+        and settings.get("country")
+        and settings.get("phone")
+    )
+
+    return OnboardingStatusResponse(
+        onboarding_completed=tenant.onboarding_completed,
+        company_details_completed=company_details_completed,
+    )
+
+
+@router.post("/onboarding/complete", response_model=OnboardingStatusResponse)
+async def complete_onboarding(
+    tenant: Tenant = Depends(get_current_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Mark onboarding as completed."""
+    settings = tenant.settings or {}
+    required_fields = ["address", "city", "country", "phone"]
+    missing_fields = [
+        field for field in required_fields if not settings.get(field)
+    ]
+
+    if missing_fields:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Company details must be completed before finishing onboarding. "
+                f"Missing: {', '.join(missing_fields)}"
+            ),
+        )
+
+    tenant.onboarding_completed = True
+    await db.flush()
+    await db.commit()
+
+    return OnboardingStatusResponse(
+        onboarding_completed=True,
+        company_details_completed=True,
+    )
+
+
+# ── Bank Accounts ─────────────────────────────────────
+
+
+class BankAccountSchema(BaseModel):
+    """A single saved bank account."""
+    id: str
+    bankName: str
+    accountHolder: str
+    accountNumber: str
+    accountType: str | None = None
+    branchName: str | None = None
+    branchCode: str | None = None
+    swiftCode: str | None = None
+
+
+class BankAccountsResponse(BaseModel):
+    """Response with saved bank accounts."""
+    accounts: list[BankAccountSchema]
+
+
+class BankAccountsUpdateRequest(BaseModel):
+    """Request to replace all bank accounts."""
+    accounts: list[BankAccountSchema]
+
+
+@router.get("/bank-accounts", response_model=BankAccountsResponse)
+async def get_bank_accounts(
+    tenant: Tenant = Depends(get_current_tenant),
+    user: User = Depends(get_current_user),
+):
+    """Get saved bank accounts for this tenant."""
+    settings = tenant.settings or {}
+    raw = settings.get("bank_accounts", [])
+    accounts = [BankAccountSchema(**a) for a in raw]
+    return BankAccountsResponse(accounts=accounts)
+
+
+@router.put("/bank-accounts", response_model=BankAccountsResponse)
+async def update_bank_accounts(
+    body: BankAccountsUpdateRequest,
+    tenant: Tenant = Depends(get_current_tenant),
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Replace all bank accounts for this tenant."""
+    settings = tenant.settings or {}
+    settings["bank_accounts"] = [a.model_dump() for a in body.accounts]
+    tenant.settings = settings
+    flag_modified(tenant, "settings")
+    await db.flush()
+    await db.commit()
+    return BankAccountsResponse(accounts=body.accounts)
 
